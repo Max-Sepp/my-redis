@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "Parser/Parser.h"
+#include "parser/Parser.h"
 
 class RespParsingTest : public ::testing::Test {
  protected:

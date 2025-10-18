@@ -11,15 +11,18 @@ endif ()
 # It's better to define source files in variables
 set(APP_SOURCES
         main.cpp
-        src/Parser/Parser.cpp
+        src/parser/Parser.cpp
+        src/store/LinkedListHashmap.h
 )
 
 set(LIB_SOURCES
-        src/Parser/Parser.cpp
+        src/parser/Parser.cpp
 )
 
 set(LIB_HEADERS
-        src/Parser/Parser.h
+        src/parser/Parser.h
+        src/store/LinearProbingHashmap.h
+        src/store/StandardMap.h
 )
 
 # Main executable
@@ -44,17 +47,24 @@ if (BUILD_TESTS)
     enable_testing()
 
     # Add the test executable with its own sources plus the library sources
-    add_executable(redis_test
+    add_executable(parser_tests
             tests/ParserTests.cpp
+            ${LIB_SOURCES}
+    )
+    add_executable(map_tests
+            tests/MapTests.cpp
             ${LIB_SOURCES}
     )
 
     # Link the test executable against Google Test
-    target_link_libraries(redis_test PRIVATE GTest::gtest_main)
+    target_link_libraries(parser_tests PRIVATE GTest::gtest_main)
+    target_link_libraries(map_tests PRIVATE GTest::gtest_main)
 
     # Include directories for the test executable
-    target_include_directories(redis_test PRIVATE src)
+    target_include_directories(parser_tests PRIVATE src)
+    target_include_directories(map_tests PRIVATE src)
 
     include(GoogleTest)
-    gtest_discover_tests(redis_test)
+    gtest_discover_tests(parser_tests)
+    gtest_discover_tests(map_tests)
 endif ()
