@@ -10,7 +10,7 @@
 #include "store/LinkedListHashmap.h"
 #include "store/StandardMap.h"
 
-size_t stringHash(const std::string &key) {
+size_t stringHash(const std::string& key) {
   constexpr std::hash<std::string> hasher;
   return hasher(key);
 }
@@ -53,63 +53,63 @@ using Implementations =
 TYPED_TEST_SUITE(MapTest, Implementations);
 
 TYPED_TEST(MapTest, InsertAndLookUp) {
-  this->map->insert("one", 1);
-  const std::unique_ptr<int> value = this->map->lookUp("one");
+  this->map->Insert("one", 1);
+  const std::unique_ptr<int> value = this->map->LookUp("one");
   ASSERT_NE(value, nullptr);
   EXPECT_EQ(*value, 1);
 }
 
 TYPED_TEST(MapTest, LookUpNonExistent) {
-  const std::unique_ptr<int> value = this->map->lookUp("nonexistent");
+  const std::unique_ptr<int> value = this->map->LookUp("nonexistent");
   EXPECT_EQ(value, nullptr);
 }
 
 TYPED_TEST(MapTest, InsertRemoveLookUp) {
-  this->map->insert("one", 1);
-  this->map->remove("one");
-  const std::unique_ptr<int> value = this->map->lookUp("one");
+  this->map->Insert("one", 1);
+  this->map->Remove("one");
+  const std::unique_ptr<int> value = this->map->LookUp("one");
   EXPECT_EQ(value, nullptr);
 }
 
 TYPED_TEST(MapTest, RemoveNonExistent) {
-  ASSERT_NO_THROW(this->map->remove("nonexistent"));
+  ASSERT_NO_THROW(this->map->Remove("nonexistent"));
 }
 
 TYPED_TEST(MapTest, UpdateValue) {
-  this->map->insert("one", 1);
-  this->map->insert("one", 100);
-  const std::unique_ptr<int> value = this->map->lookUp("one");
+  this->map->Insert("one", 1);
+  this->map->Insert("one", 100);
+  const std::unique_ptr<int> value = this->map->LookUp("one");
   ASSERT_NE(value, nullptr);
   EXPECT_EQ(*value, 100);
 }
 
 TYPED_TEST(MapTest, MultipleInsertions) {
-  this->map->insert("one", 1);
-  this->map->insert("two", 2);
-  this->map->insert("three", 3);
+  this->map->Insert("one", 1);
+  this->map->Insert("two", 2);
+  this->map->Insert("three", 3);
 
-  const std::unique_ptr<int> value_one = this->map->lookUp("one");
+  const std::unique_ptr<int> value_one = this->map->LookUp("one");
   ASSERT_NE(value_one, nullptr);
   EXPECT_EQ(*value_one, 1);
 
-  const std::unique_ptr<int> value_two = this->map->lookUp("two");
+  const std::unique_ptr<int> value_two = this->map->LookUp("two");
   ASSERT_NE(value_two, nullptr);
   EXPECT_EQ(*value_two, 2);
 
-  const std::unique_ptr<int> value_three = this->map->lookUp("three");
+  const std::unique_ptr<int> value_three = this->map->LookUp("three");
   ASSERT_NE(value_three, nullptr);
   EXPECT_EQ(*value_three, 3);
 }
 
 TYPED_TEST(MapTest, OperationsAreIsolated) {
-  this->map->insert("one", 1);
-  this->map->insert("two", 2);
+  this->map->Insert("one", 1);
+  this->map->Insert("two", 2);
 
-  this->map->remove("one");
+  this->map->Remove("one");
 
-  EXPECT_EQ(this->map->lookUp("one"), nullptr);
+  EXPECT_EQ(this->map->LookUp("one"), nullptr);
 
-  const std::unique_ptr<int> value_two = this->map->lookUp("two");
+  const std::unique_ptr<int> value_two = this->map->LookUp("two");
   ASSERT_NE(value_two, nullptr);
   EXPECT_EQ(*value_two, 2);
 }
@@ -125,7 +125,7 @@ TYPED_TEST(MapTest, BulkInsertPerformance) {
 
   const auto start = clock::now();
   for (size_t i = 0; i < N; ++i) {
-    this->map->insert(std::to_string(i), static_cast<int>(i));
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
@@ -141,12 +141,12 @@ TYPED_TEST(MapTest, BulkLookupPerformance) {
 
   // Ensure the map is populated.
   for (size_t i = 0; i < N; ++i) {
-    this->map->insert(std::to_string(i), static_cast<int>(i));
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
 
   auto start = clock::now();
   for (size_t i = 0; i < N; ++i) {
-    const auto v = this->map->lookUp(std::to_string(i));
+    const auto v = this->map->LookUp(std::to_string(i));
     ASSERT_NE(v, nullptr);
     EXPECT_EQ(*v, static_cast<int>(i));
   }
@@ -164,12 +164,12 @@ TYPED_TEST(MapTest, BulkRemovePerformance) {
 
   // Ensure the map is populated.
   for (size_t i = 0; i < N; ++i) {
-    this->map->insert(std::to_string(i), static_cast<int>(i));
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
 
   auto start = clock::now();
   for (size_t i = 0; i < N; ++i) {
-    this->map->remove(std::to_string(i));
+    this->map->Remove(std::to_string(i));
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
@@ -181,7 +181,8 @@ TYPED_TEST(MapTest, BulkRemovePerformance) {
 
 // --- Benchmarking Tests ---
 // These tests are not for correctness but for performance comparison.
-// They will output the timings of different implementations for bulk operations.
+// They will output the timings of different implementations for bulk
+// operations.
 TEST(MapBenchmark, CompareImplementations) {
   constexpr size_t N = 50000;
   using clock = std::chrono::high_resolution_clock;
@@ -203,7 +204,7 @@ TEST(MapBenchmark, CompareImplementations) {
     auto map = factory();
     const auto start = clock::now();
     for (size_t i = 0; i < N; ++i) {
-      map->insert(std::to_string(i), static_cast<int>(i));
+      map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);
@@ -216,11 +217,11 @@ TEST(MapBenchmark, CompareImplementations) {
   for (auto const& [name, factory] : factories) {
     auto map = factory();
     for (size_t i = 0; i < N; ++i) {
-      map->insert(std::to_string(i), static_cast<int>(i));
+      map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto start = clock::now();
     for (size_t i = 0; i < N; ++i) {
-      map->lookUp(std::to_string(i));
+      map->LookUp(std::to_string(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);
@@ -233,11 +234,11 @@ TEST(MapBenchmark, CompareImplementations) {
   for (auto const& [name, factory] : factories) {
     auto map = factory();
     for (size_t i = 0; i < N; ++i) {
-      map->insert(std::to_string(i), static_cast<int>(i));
+      map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto start = clock::now();
     for (size_t i = 0; i < N; ++i) {
-      map->remove(std::to_string(i));
+      map->Remove(std::to_string(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);

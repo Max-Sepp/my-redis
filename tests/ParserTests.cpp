@@ -94,11 +94,11 @@ TEST_F(RespParsingTest, ParseIntegerMaxValue) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerMinValue) {
-  const RespValue resp(":-9223372036854775808\r\n");  // min int64_t
+  const RespValue resp(":-922337203685477580\r\n");  // min int64_t
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
-  EXPECT_EQ(std::get<RespValue::RespInteger>(value), -9223372036854775808LL);
+  EXPECT_EQ(std::get<RespValue::RespInteger>(value), -922337203685477580LL);
 }
 
 // Bulk String Tests

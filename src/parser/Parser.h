@@ -19,7 +19,7 @@ class RespValue {
   using RespVariant = std::variant<RespSimpleString, RespSimpleError,
                                    RespInteger, RespBulkString, RespArray>;
 
-  explicit RespValue(const std::string& respString);
+  explicit RespValue(const std::string& resp_string);
   explicit RespValue(RespVariant variant) : value(std::move(variant)) {}
 
   [[nodiscard]] std::string serialize() const;
@@ -29,13 +29,13 @@ class RespValue {
  private:
   RespVariant value;
 
-  static RespVariant parseValue(const std::string& str, size_t& pos);
-  static RespSimpleString parseSimpleString(const std::string& str,
+  static RespVariant ParseValue(const std::string& str, size_t& pos);
+  static RespSimpleString ParseSimpleString(const std::string& str,
                                             size_t& pos);
-  static RespSimpleError parseSimpleError(const std::string& str, size_t& pos);
-  static RespInteger parseInteger(const std::string& str, size_t& pos);
-  static RespBulkString parseBulkString(const std::string& str, size_t& pos);
-  static RespArray parseArray(const std::string& str, size_t& pos);
+  static RespSimpleError ParseSimpleError(const std::string& str, size_t& pos);
+  static RespInteger ParseInteger(const std::string& str, size_t& pos);
+  static RespBulkString ParseBulkString(const std::string& str, size_t& pos);
+  static RespArray ParseArray(const std::string& str, size_t& pos);
 };
 
 #endif  // MY_REDIS_PARSER_H

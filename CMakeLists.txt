@@ -10,7 +10,7 @@ endif ()
 
 # It's better to define source files in variables
 set(APP_SOURCES
-        main.cpp
+        src/main.cpp
         src/parser/Parser.cpp
         src/store/LinkedListHashmap.h
 )
