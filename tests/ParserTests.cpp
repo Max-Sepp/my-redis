@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "parser/Parser.h"
+#include "respvalue/RespValue.h"
 
 class RespParsingTest : public ::testing::Test {
  protected:
@@ -236,7 +236,7 @@ TEST_F(RespParsingTest, ParseInvalidTypePrefix) {
 }
 
 TEST_F(RespParsingTest, ParseMissingCRLF) {
-  EXPECT_THROW(RespValue("+OK"), std::invalid_argument);
+  EXPECT_THROW(RespValue("+OK"), std::out_of_range);
 }
 
 TEST_F(RespParsingTest, ParseInvalidInteger) {
@@ -245,7 +245,7 @@ TEST_F(RespParsingTest, ParseInvalidInteger) {
 
 TEST_F(RespParsingTest, ParseBulkStringLengthMismatch) {
   EXPECT_THROW(RespValue("$6\r\nfoo\r\n"),
-               std::invalid_argument);  // length says 6 but only 3 chars
+               std::out_of_range);  // length says 6 but only 3 chars
 }
 
 TEST_F(RespParsingTest, ParseNegativeBulkStringLengthNotMinusOne) {
@@ -254,7 +254,7 @@ TEST_F(RespParsingTest, ParseNegativeBulkStringLengthNotMinusOne) {
 
 TEST_F(RespParsingTest, ParseArrayCountMismatch) {
   EXPECT_THROW(RespValue("*2\r\n$3\r\nfoo\r\n"),
-               std::invalid_argument);  // says 2 elements but only 1
+               std::out_of_range);  // says 2 elements but only 1
 }
 
 class RespSerializeTests : public ::testing::Test {

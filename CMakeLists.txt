@@ -11,16 +11,18 @@ endif ()
 # It's better to define source files in variables
 set(APP_SOURCES
         src/main.cpp
-        src/parser/Parser.cpp
-        src/store/LinkedListHashmap.h
+        src/respvalue/RespValue.cpp
+        src/respvalue/RecvBufferIterator.cpp
 )
 
 set(LIB_SOURCES
-        src/parser/Parser.cpp
+        src/respvalue/RespValue.cpp
+        src/respvalue/RecvBufferIterator.cpp
 )
 
 set(LIB_HEADERS
-        src/parser/Parser.h
+        src/respvalue/RespValue.h
+        src/respvalue/RecvBufferIterator.h
         src/store/LinearProbingHashmap.h
         src/store/StandardMap.h
 )
