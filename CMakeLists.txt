@@ -10,14 +10,13 @@ endif ()
 
 # It's better to define source files in variables
 set(APP_SOURCES
-        src/main.cpp
         src/respvalue/RespValue.cpp
         src/respvalue/RecvBufferIterator.cpp
-)
-
-set(LIB_SOURCES
-        src/respvalue/RespValue.cpp
-        src/respvalue/RecvBufferIterator.cpp
+        src/requests/GetRequest.cpp
+        src/Handler.cpp
+        src/requests/SetRequest.cpp
+        src/store/Hash.cpp
+        src/respvalue/RespValues.cpp
 )
 
 set(LIB_HEADERS
@@ -28,8 +27,8 @@ set(LIB_HEADERS
 )
 
 # Main executable
-add_executable(my_redis ${APP_SOURCES})
-target_include_directories(my_redis PRIVATE src)
+add_executable(my_redis_server src/server.cpp ${APP_SOURCES})
+target_include_directories(my_redis_server PRIVATE src)
 
 # --- Testing ---
 # Only include tests if the TESTS option is ON (default)
@@ -51,11 +50,11 @@ if (BUILD_TESTS)
     # Add the test executable with its own sources plus the library sources
     add_executable(parser_tests
             tests/ParserTests.cpp
-            ${LIB_SOURCES}
+            ${APP_SOURCES}
     )
     add_executable(map_tests
             tests/MapTests.cpp
-            ${LIB_SOURCES}
+            ${APP_SOURCES}
     )
 
     # Link the test executable against Google Test

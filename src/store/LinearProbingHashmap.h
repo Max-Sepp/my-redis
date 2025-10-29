@@ -1,6 +1,7 @@
 #ifndef MY_REDIS_HASHMAP_H
 #define MY_REDIS_HASHMAP_H
 
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <optional>

@@ -6,27 +6,23 @@
 #include <memory>
 #include <string>
 
+#include "store/Hash.h"
 #include "store/LinearProbingHashmap.h"
 #include "store/LinkedListHashmap.h"
 #include "store/StandardMap.h"
-
-size_t stringHash(const std::string& key) {
-  constexpr std::hash<std::string> hasher;
-  return hasher(key);
-}
 
 struct LinearProbingHashmapStringIntFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
     // Use small initial capacity to make resize easier to trigger in tests
     return std::make_unique<LinearProbingHashmap<std::string, int>>(
-        0.75, stringHash, 2);
+        0.75, string_hash, 2);
   }
 };
 
 struct LinkedListHashmapStringIntFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
     return std::make_unique<LinkedListHashmap<std::string, int>>(0.75,
-                                                                 stringHash);
+                                                                 string_hash);
   }
 };
 
