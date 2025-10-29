@@ -1,5 +1,7 @@
 #include "GetRequest.h"
 
+#include <stdexcept>
+
 GetRequest::GetRequest(const RespValue& resp_value) {
   if (!std::holds_alternative<RespValue::RespArray>(resp_value.getValue()))
     throw std::invalid_argument(

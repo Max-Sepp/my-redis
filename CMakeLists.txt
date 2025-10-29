@@ -17,6 +17,7 @@ set(APP_SOURCES
         src/requests/SetRequest.cpp
         src/store/Hash.cpp
         src/respvalue/RespValues.cpp
+        src/logging/FileLogger.cpp
 )
 
 set(LIB_HEADERS

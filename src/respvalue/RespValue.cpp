@@ -1,8 +1,5 @@
 #include "RespValue.h"
 
-#include <sys/socket.h>
-
-#include <cassert>
 #include <sstream>
 #include <stdexcept>
 
@@ -34,7 +31,7 @@ std::string ReadLine(InputIterator& it, InputIterator& end) {
     const char c = *it;
     ++it;
     if (c == '\r') {
-      if (it != end && *it == '\n') {
+      if (*it == '\n') {
         ++it;
         return line;
       }

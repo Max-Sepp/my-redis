@@ -4,5 +4,6 @@
 
 RespValue NullBulkString();
 RespValue BulkString(const std::optional<std::string>& string);
+RespValue Error(const std::string& message);
 
 #endif  // MY_REDIS_NULLBULKSTRING_H
