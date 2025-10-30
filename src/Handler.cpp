@@ -50,27 +50,33 @@ void Handler::HandleGetRequest(const int client_fd,
   if (value == nullptr) {
     // Not Found
     const std::string not_found = NullBulkString().serialize();
-    send(client_fd, not_found.c_str(), not_found.size(), 0);
+    SendResponse(client_fd, not_found);
   } else {
     // Found
     const std::string result = BulkString(*value).serialize();
-    send(client_fd, result.c_str(), result.size(), 0);
+    SendResponse(client_fd, result);
   }
 }
 
-void Handler::HandleSetRequest(int client_fd, const SetRequest& request) const {
+void Handler::HandleSetRequest(const int client_fd,
+                               const SetRequest& request) const {
   try {
     this->data_->Insert(request.getKey(), request.getValue());
   } catch (std::exception& _) {
-    send(client_fd, INTERNAL_ERROR_RESP.c_str(), INTERNAL_ERROR_RESP.size(), 0);
+    SendResponse(client_fd, INTERNAL_ERROR_RESP);
     return;
   }
-  logger_->Log("Sending: " + OK_RESP);
-  send(client_fd, OK_RESP.c_str(), OK_RESP.size(), 0);
+  SendResponse(client_fd, OK_RESP);
 }
 
-void Handler::UnknownCommand(const int client_fd) {
+void Handler::UnknownCommand(const int client_fd) const {
   const std::string unknown_error =
       Error("Unknown subcommand or command").serialize();
-  send(client_fd, unknown_error.c_str(), unknown_error.size(), 0);
+  SendResponse(client_fd, unknown_error);
+}
+
+void Handler::SendResponse(const int client_fd,
+                           const std::string& message) const {
+  logger_->Log("Sending: " + message);
+  send(client_fd, message.c_str(), message.size(), 0);
 }

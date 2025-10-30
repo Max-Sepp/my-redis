@@ -23,7 +23,8 @@ class Handler {
 
   void HandleGetRequest(int client_fd, const GetRequest& request) const;
   void HandleSetRequest(int client_fd, const SetRequest& request) const;
-  static void UnknownCommand(int client_fd);
+  void UnknownCommand(int client_fd) const;
+  void SendResponse(int client_fd, const std::string& message) const;
 };
 
 #endif  // MY_REDIS_HANDLER_H
