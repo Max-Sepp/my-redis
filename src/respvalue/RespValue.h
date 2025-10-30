@@ -21,7 +21,7 @@ class RespValue {
   using RespVariant = std::variant<RespSimpleString, RespSimpleError,
                                    RespInteger, RespBulkString, RespArray>;
 
-  RespValue(RecvBufferIterator begin, RecvBufferIterator end);
+  RespValue(RecvBufferIterator& begin, RecvBufferIterator& end);
   explicit RespValue(const std::string& resp_string);
   explicit RespValue(RespVariant variant) : value(std::move(variant)) {}
 

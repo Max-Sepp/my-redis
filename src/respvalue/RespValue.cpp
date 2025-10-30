@@ -133,7 +133,7 @@ RespValue::RespArray ParseArray(InputIterator& it, InputIterator& end) {
 }
 }  // namespace
 
-RespValue::RespValue(RecvBufferIterator begin, RecvBufferIterator end) {
+RespValue::RespValue(RecvBufferIterator& begin, RecvBufferIterator& end) {
   value = ParseValue(begin, end);
   // We don't check if the whole buffer is consumed, as there might be more
   // commands pipelined.

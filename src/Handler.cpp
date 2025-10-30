@@ -18,12 +18,12 @@ Handler::Handler(
 
 void Handler::Handle(const int client_fd, const sockaddr_in client_addr) const {
   RecvBufferIterator begin(client_fd);
-  const RecvBufferIterator end;
+  RecvBufferIterator end;
 
   while (begin != end) {
     std::unique_ptr<RespValue> resp;
     try {
-      resp = std::make_unique<RespValue>(begin, end);
+      resp = std::make_unique<RespValue>(std::ref(begin), std::ref(end));
     } catch (std::invalid_argument& e) {
       logger_->Log(e.what());
     }
@@ -38,7 +38,6 @@ void Handler::Handle(const int client_fd, const sockaddr_in client_addr) const {
       HandleSetRequest(client_fd, SetRequest(*resp));
     else
       UnknownCommand(client_fd);
-    break;
   }
 
   close(client_fd);

@@ -5,11 +5,13 @@
 #include <cstddef>
 
 class RecvBufferIterator {
-  const int socket_fd;
+ private:
+  int socket_fd;
   static constexpr size_t buffer_size = 1024;
   mutable std::array<char, buffer_size> buffer;
-  mutable size_t buffer_pos;
-  mutable size_t buffer_end;
+  size_t pos;
+  mutable size_t prev_num_chars_read_from_socket;
+  mutable size_t num_chars_read_from_socket;
   mutable bool end;
 
  public:
@@ -18,6 +20,11 @@ class RecvBufferIterator {
   using difference_type = std::ptrdiff_t;
   using pointer = char*;
   using reference = char&;
+
+  RecvBufferIterator(const RecvBufferIterator& other) = default;
+  RecvBufferIterator(RecvBufferIterator&& other) noexcept;
+  RecvBufferIterator& operator=(const RecvBufferIterator& other);
+  RecvBufferIterator& operator=(RecvBufferIterator&& other) noexcept;
 
   explicit RecvBufferIterator(int socket_fd);
   RecvBufferIterator();
