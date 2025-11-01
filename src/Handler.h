@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "logging/Logger.h"
+#include "requests/DelRequest.h"
 #include "requests/GetRequest.h"
 #include "requests/SetRequest.h"
 #include "store/Map.h"
@@ -23,6 +24,7 @@ class Handler {
 
   void HandleGetRequest(int client_fd, const GetRequest& request) const;
   void HandleSetRequest(int client_fd, const SetRequest& request) const;
+  void HandleDelRequest(int client_fd, const DelRequest& request) const;
   void UnknownCommand(int client_fd) const;
   void SendResponse(int client_fd, const std::string& message) const;
 };

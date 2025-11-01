@@ -5,6 +5,7 @@
 
 #include <iostream>
 
+#include "requests/DelRequest.h"
 #include "respvalue/RespValue.h"
 #include "respvalue/RespValues.h"
 
@@ -36,6 +37,8 @@ void Handler::Handle(const int client_fd, const sockaddr_in client_addr) const {
       HandleGetRequest(client_fd, GetRequest(*resp));
     else if (SetRequest::IsRequest(*resp))
       HandleSetRequest(client_fd, SetRequest(*resp));
+    else if (DelRequest::IsRequest(*resp))
+      HandleDelRequest(client_fd, DelRequest(*resp));
     else
       UnknownCommand(client_fd);
   }
@@ -67,6 +70,16 @@ void Handler::HandleSetRequest(const int client_fd,
     return;
   }
   SendResponse(client_fd, OK_RESP);
+}
+void Handler::HandleDelRequest(const int client_fd,
+                               const DelRequest& request) const {
+  try {
+    this->data_->Remove(request.getKey());
+  } catch (std::exception& _) {
+    SendResponse(client_fd, INTERNAL_ERROR_RESP);
+    return;
+  }
+  SendResponse(client_fd, Integer(1).serialize());
 }
 
 void Handler::UnknownCommand(const int client_fd) const {

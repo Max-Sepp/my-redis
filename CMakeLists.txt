@@ -18,6 +18,9 @@ set(APP_SOURCES
         src/store/Hash.cpp
         src/respvalue/RespValues.cpp
         src/logging/FileLogger.cpp
+        src/requests/OneArgRequest.cpp
+        src/requests/DelRequest.cpp
+        src/requests/DelRequest.h
 )
 
 set(LIB_HEADERS
