@@ -7,16 +7,20 @@
 
 #include "Handler.h"
 #include "logging/FileLogger.h"
+#include "store/CoarseGrainConcurrentMapWrapper.h"
 #include "store/Hash.h"
 #include "store/LinearProbingHashmap.h"
 
 int main() {
   std::shared_ptr<Logger> logger = std::make_shared<FileLogger>(std::cout);
-  const auto handler = std::make_unique<Handler>(
-      std::make_unique<
-          LinearProbingHashmap<std::string, std::optional<std::string>>>(
-          0.75, string_hash),
-      logger);
+  auto underlying_map = std::make_unique<
+      LinearProbingHashmap<std::string, std::optional<std::string>>>(
+      0.75, string_hash);
+  auto concurrent_map = std::make_unique<
+      CoarseGrainConcurrentMapWrapper<std::string, std::optional<std::string>>>(
+      std::move(underlying_map));
+  const auto handler =
+      std::make_unique<Handler>(std::move(concurrent_map), logger);
 
   const int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
