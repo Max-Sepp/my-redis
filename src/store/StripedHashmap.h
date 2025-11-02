@@ -1,6 +1,7 @@
 #ifndef MY_REDIS_STRIPEDHASHMAP_H
 #define MY_REDIS_STRIPEDHASHMAP_H
 
+#include <cassert>
 #include <functional>
 #include <mutex>
 
