@@ -20,14 +20,6 @@ set(APP_SOURCES
         src/logging/FileLogger.cpp
         src/requests/OneArgRequest.cpp
         src/requests/DelRequest.cpp
-        src/requests/DelRequest.h
-)
-
-set(LIB_HEADERS
-        src/respvalue/RespValue.h
-        src/respvalue/RecvBufferIterator.h
-        src/store/LinearProbingHashmap.h
-        src/store/StandardMap.h
 )
 
 # Main executable

@@ -9,16 +9,13 @@
 #include "logging/FileLogger.h"
 #include "store/CoarseGrainConcurrentMapWrapper.h"
 #include "store/Hash.h"
-#include "store/LinearProbingHashmap.h"
+#include "store/StripedHashmap.h"
 
 int main() {
   std::shared_ptr<Logger> logger = std::make_shared<FileLogger>(std::cout);
-  auto underlying_map = std::make_unique<
-      LinearProbingHashmap<std::string, std::optional<std::string>>>(
-      0.75, string_hash);
-  auto concurrent_map = std::make_unique<
-      CoarseGrainConcurrentMapWrapper<std::string, std::optional<std::string>>>(
-      std::move(underlying_map));
+  auto concurrent_map =
+      std::make_unique<StripedHashmap<std::string, std::optional<std::string>>>(
+          0.75, string_hash);
   const auto handler =
       std::make_unique<Handler>(std::move(concurrent_map), logger);
 

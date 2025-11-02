@@ -10,6 +10,7 @@
 #include "store/LinearProbingHashmap.h"
 #include "store/LinkedListHashmap.h"
 #include "store/StandardMap.h"
+#include "store/StripedHashmap.h"
 
 struct LinearProbingHashmapStringIntFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
@@ -32,6 +33,13 @@ struct StandardMapFactory {
   }
 };
 
+struct StripedHashmapFactory {
+  static std::unique_ptr<Map<std::string, int>> create() {
+    return std::make_unique<StripedHashmap<std::string, int>>(0.75,
+                                                              string_hash);
+  }
+};
+
 // 1. Template the test fixture on a type `T`
 template <typename MapFactory>
 class MapTest : public ::testing::Test {
@@ -44,7 +52,7 @@ class MapTest : public ::testing::Test {
 // List of types to be tested
 using Implementations =
     ::testing::Types<LinearProbingHashmapStringIntFactory, StandardMapFactory,
-                     LinkedListHashmapStringIntFactory>;
+                     LinkedListHashmapStringIntFactory, StripedHashmapFactory>;
 
 TYPED_TEST_SUITE(MapTest, Implementations);
 
@@ -189,6 +197,7 @@ TEST(MapBenchmark, CompareImplementations) {
   factories["LinkedListHashmap"] = &LinkedListHashmapStringIntFactory::create;
   factories["LinearProbingHashmap"] =
       &LinearProbingHashmapStringIntFactory::create;
+  factories["StripedHashmap"] = &StripedHashmapFactory::create;
 
   std::cout << std::endl
             << "[==========] Running MapBenchmark for N = " << N
