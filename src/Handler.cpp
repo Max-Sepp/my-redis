@@ -18,31 +18,6 @@ Handler::Handler(
     : data_(std::move(data)), logger_(logger) {}
 
 void Handler::Handle(const int client_fd, const sockaddr_in client_addr) const {
-  RecvBufferIterator begin(client_fd);
-  RecvBufferIterator end;
-
-  while (begin != end) {
-    std::unique_ptr<RespValue> resp;
-    try {
-      resp = std::make_unique<RespValue>(std::ref(begin), std::ref(end));
-    } catch (std::invalid_argument& e) {
-      logger_->Log(e.what());
-    }
-
-    const std::string addr = inet_ntoa(client_addr.sin_addr);
-    logger_->Log("Connection from address: " + addr +
-                 " Request was: " + resp->serialize());
-
-    if (GetRequest::IsRequest(*resp))
-      HandleGetRequest(client_fd, GetRequest(*resp));
-    else if (SetRequest::IsRequest(*resp))
-      HandleSetRequest(client_fd, SetRequest(*resp));
-    else if (DelRequest::IsRequest(*resp))
-      HandleDelRequest(client_fd, DelRequest(*resp));
-    else
-      UnknownCommand(client_fd);
-  }
-
   close(client_fd);
 }
 

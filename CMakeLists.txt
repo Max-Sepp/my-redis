@@ -11,7 +11,6 @@ endif ()
 # It's better to define source files in variables
 set(APP_SOURCES
         src/respvalue/RespValue.cpp
-        src/respvalue/RecvBufferIterator.cpp
         src/requests/GetRequest.cpp
         src/Handler.cpp
         src/requests/SetRequest.cpp
@@ -46,7 +45,7 @@ if (BUILD_TESTS)
     # Add the test executable with its own sources plus the library sources
     add_executable(parser_tests
             tests/ParserTests.cpp
-            ${APP_SOURCES}
+            src/respvalue/RespValue.cpp
     )
     add_executable(map_tests
             tests/MapTests.cpp

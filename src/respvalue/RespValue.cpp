@@ -1,152 +1,123 @@
 #include "RespValue.h"
 
+#include <cassert>
 #include <sstream>
 #include <stdexcept>
 
-#include "RecvBufferIterator.h"
+RespValue::RespValue(RespVariant variant) : value_(std::move(variant)) {}
 
-namespace {
-template <typename InputIterator>
-std::string ReadLine(InputIterator& it, InputIterator& end);
-template <typename InputIterator>
-RespValue::RespVariant ParseValue(InputIterator& it, InputIterator& end);
-template <typename InputIterator>
-RespValue::RespSimpleString ParseSimpleString(InputIterator& it,
-                                              InputIterator& end);
-template <typename InputIterator>
-RespValue::RespSimpleError ParseSimpleError(InputIterator& it,
-                                            InputIterator& end);
-template <typename InputIterator>
-RespValue::RespInteger ParseInteger(InputIterator& it, InputIterator& end);
-template <typename InputIterator>
-RespValue::RespBulkString ParseBulkString(InputIterator& it,
-                                          InputIterator& end);
-template <typename InputIterator>
-RespValue::RespArray ParseArray(InputIterator& it, InputIterator& end);
-
-template <typename InputIterator>
-std::string ReadLine(InputIterator& it, InputIterator& end) {
-  std::string line;
-  while (it != end) {
-    const char c = *it;
-    ++it;
-    if (c == '\r') {
-      if (*it == '\n') {
-        ++it;
-        return line;
-      }
-      throw std::invalid_argument("Invalid delimiter");
-    }
-    line += c;
+RespValue::RespVariant RespValue::parseVariant(const std::string& str,
+                                               size_t& pos) {
+  if (pos >= str.size()) {
+    throw std::out_of_range("Unexpected end of input while parsing RESP value");
   }
-  throw std::out_of_range(
-      "Could not find delimiting \\r\\n string in the input string");
-}
-
-template <typename InputIterator>
-RespValue::RespVariant ParseValue(InputIterator& it, InputIterator& end) {
-  if (it == end) {
-    throw std::out_of_range("Not enough data to parse value type");
-  }
-  const char type_char = *it;
-  ++it;
-  switch (type_char) {
+  switch (str[pos]) {
     case '+':
-      return ParseSimpleString(it, end);
+      return parseSimpleString(str, pos);
     case '-':
-      return ParseSimpleError(it, end);
+      return parseSimpleError(str, pos);
     case ':':
-      return ParseInteger(it, end);
+      return parseInteger(str, pos);
     case '$':
-      return ParseBulkString(it, end);
+      return parseBulkString(str, pos);
     case '*':
-      return ParseArray(it, end);
+      return parseArray(str, pos);
     default:
-      throw std::invalid_argument("Invalid resp string parsed in");
+      throw std::invalid_argument("Invalid resp type prefix");
   }
 }
 
-template <typename InputIterator>
-RespValue::RespSimpleString ParseSimpleString(InputIterator& it,
-                                              InputIterator& end) {
-  return ReadLine(it, end);
+RespValue::RespSimpleString RespValue::parseSimpleString(const std::string& str,
+                                                         size_t& pos) {
+  assert(str[pos] == '+');
+  const size_t endPos = str.find("\r\n", pos + 1);
+  if (endPos == std::string::npos) {
+    throw std::out_of_range("Missing CRLF for simple string");
+  }
+  const std::string simpleString = str.substr(pos + 1, endPos - pos - 1);
+  pos = endPos + 2;  // skip \r\n
+  return simpleString;
 }
 
-template <typename InputIterator>
-RespValue::RespSimpleError ParseSimpleError(InputIterator& it,
-                                            InputIterator& end) {
-  return RespValue::RespSimpleError{.message = ReadLine(it, end)};
+RespValue::RespSimpleError RespValue::parseSimpleError(const std::string& str,
+                                                       size_t& pos) {
+  assert(str[pos] == '-');
+  const size_t endPos = str.find("\r\n", pos + 1);
+  if (endPos == std::string::npos) {
+    throw std::out_of_range("Missing CRLF for simple error");
+  }
+  const std::string errorMessage = str.substr(pos + 1, endPos - pos - 1);
+  pos = endPos + 2;  // skip \r\n
+  return RespSimpleError{.message = errorMessage};
 }
 
-template <typename InputIterator>
-RespValue::RespInteger ParseInteger(InputIterator& it, InputIterator& end) {
-  const std::string integer_string = ReadLine(it, end);
-  return stoll(integer_string);
+RespValue::RespInteger RespValue::parseInteger(const std::string& str,
+                                               size_t& pos) {
+  assert(str[pos] == ':');
+  const size_t endPos = str.find("\r\n", pos + 1);
+  if (endPos == std::string::npos) {
+    throw std::out_of_range("Missing CRLF for integer");
+  }
+  const std::string integerString = str.substr(pos + 1, endPos - pos - 1);
+  const int64_t integerValue = stoll(integerString);
+  pos = endPos + 2;  // skip \r\n
+  return integerValue;
 }
 
-template <typename InputIterator>
-RespValue::RespBulkString ParseBulkString(InputIterator& it,
-                                          InputIterator& end) {
-  const std::string length_string = ReadLine(it, end);
-  const long long bulk_string_length = stoll(length_string);
-
-  if (bulk_string_length == -1) {
+RespValue::RespBulkString RespValue::parseBulkString(const std::string& str,
+                                                     size_t& pos) {
+  assert(str[pos] == '$');
+  const size_t endOfLength = str.find("\r\n", pos + 1);
+  if (endOfLength == std::string::npos) {
+    throw std::out_of_range("Missing CRLF after bulk-string length");
+  }
+  const std::string lengthString = str.substr(pos + 1, endOfLength - pos - 1);
+  const long long bulkStringLength = stoll(lengthString);
+  pos = endOfLength + 2;
+  if (bulkStringLength == -1) {
     return std::nullopt;
   }
-  if (bulk_string_length < -1) {
+  if (bulkStringLength <= -2) {
     throw std::invalid_argument(
         "Bulk string has a negative length and is not null bulk string");
   }
-
-  std::string bulkString;
-  bulkString.reserve(bulk_string_length);
-  for (long long i = 0; i < bulk_string_length; ++i) {
-    if (it == end) {
-      throw std::out_of_range("Incomplete bulk string content");
-    }
-    bulkString += *it;
-    ++it;
+  // Ensure there's enough data for the bulk string content plus trailing CRLF.
+  if (bulkStringLength < 0 ||
+      (static_cast<size_t>(pos) + static_cast<size_t>(bulkStringLength) + 2) >
+          str.size()) {
+    throw std::out_of_range("Bulk string payload truncated or missing CRLF");
   }
-
-  if (it == end || *it != '\r') {
-    throw std::invalid_argument("Bulk string not followed by \\r\\n");
+  // Verify terminating CRLF after payload.
+  if (str[pos + bulkStringLength] != '\r' ||
+      str[pos + bulkStringLength + 1] != '\n') {
+    throw std::out_of_range("Bulk string missing terminating CRLF");
   }
-  ++it;
-  if (it == end || *it != '\n') {
-    throw std::invalid_argument("Bulk string not followed by \\r\\n");
-  }
-  ++it;
-
+  std::string bulkString = str.substr(pos, static_cast<size_t>(bulkStringLength));
+  pos += static_cast<size_t>(bulkStringLength) + 2;
   return bulkString;
 }
 
-template <typename InputIterator>
-RespValue::RespArray ParseArray(InputIterator& it, InputIterator& end) {
-  const std::string length_string = ReadLine(it, end);
-  const long long array_length = stoll(length_string);
-
+RespValue::RespArray RespValue::parseArray(const std::string& str,
+                                           size_t& pos) {
+  assert(str[pos] == '*');
+  const size_t endOfLength = str.find("\r\n", pos + 1);
+  if (endOfLength == std::string::npos) {
+    throw std::out_of_range("Missing CRLF after array length");
+  }
+  const std::string lengthString = str.substr(pos + 1, endOfLength - pos - 1);
+  const long long arrayLength = stoll(lengthString);
+  pos = endOfLength + 2;
+  if (arrayLength < 0) {
+    throw std::invalid_argument("Negative array length not allowed");
+  }
   std::vector<RespValue> output;
-  for (size_t i = 0; i < array_length; i++) {
-    output.emplace_back(ParseValue(it, end));
+  for (long long i = 0; i < arrayLength; ++i) {
+    if (pos >= str.size()) {
+      throw std::out_of_range("Array element missing/truncated");
+    }
+    output.push_back(RespValue(parseVariant(str, pos)));
   }
   return output;
-}
-}  // namespace
-
-RespValue::RespValue(RecvBufferIterator& begin, RecvBufferIterator& end) {
-  value = ParseValue(begin, end);
-  // We don't check if the whole buffer is consumed, as there might be more
-  // commands pipelined.
-}
-
-RespValue::RespValue(const std::string& resp_string) {
-  auto begin = resp_string.cbegin();
-  auto end = resp_string.cend();
-  value = ParseValue(begin, end);
-
-  if (begin != end) {
-    throw std::invalid_argument("Extra data after valid RESP message");
-  }
 }
 
 std::string RespValue::serialize() const {
@@ -175,7 +146,16 @@ std::string RespValue::serialize() const {
         }
         throw std::invalid_argument("Resp Value variant not a valid variant");
       },
-      value);
+      value_);
 }
 
-const RespValue::RespVariant& RespValue::getValue() const { return value; }
+const RespValue::RespVariant& RespValue::getValue() const { return value_; }
+
+std::pair<RespValue, size_t> RespValue::FromString(const std::string& str) {
+  size_t pos = 0;
+  return std::make_pair(RespValue(parseVariant(str, pos)), pos);
+}
+
+RespValue RespValue::FromVariant(const RespVariant& variant) {
+  return RespValue(variant);
+}
