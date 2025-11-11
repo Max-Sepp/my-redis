@@ -7,6 +7,7 @@
 
 #include "requests/DelRequest.h"
 #include "respvalue/RespValue.h"
+#include "respvalue/RespValueQueue.h"
 #include "respvalue/RespValues.h"
 
 const std::string INTERNAL_ERROR_RESP = "-ERR internal error\r\n";
@@ -18,7 +19,36 @@ Handler::Handler(
     : data_(std::move(data)), logger_(logger) {}
 
 void Handler::Handle(const int client_fd, const sockaddr_in client_addr) const {
+  constexpr size_t buf_size = 1024;
+  char buffer[buf_size];
+
+  RespValueQueue resp_queue;
+
+  for (;;) {
+    size_t n = recv(client_fd, buffer, buf_size, 0);
+    if (n == 0) break;
+    std::string input_string(buffer, n);
+    logger_->Log("Received: " + input_string);
+    resp_queue.PushString(input_string);
+
+    while (resp_queue.HasValue()) {
+      DispatchRequest(client_fd, resp_queue.PopValue());
+    }
+  }
+
   close(client_fd);
+}
+
+void Handler::DispatchRequest(int client_fd,
+                              const RespValue& resp_value) const {
+  if (GetRequest::IsRequest(resp_value))
+    HandleGetRequest(client_fd, GetRequest(resp_value));
+  else if (SetRequest::IsRequest(resp_value))
+    HandleSetRequest(client_fd, SetRequest(resp_value));
+  else if (DelRequest::IsRequest(resp_value))
+    HandleDelRequest(client_fd, DelRequest(resp_value));
+  else
+    UnknownCommand(client_fd);
 }
 
 void Handler::HandleGetRequest(const int client_fd,

@@ -22,6 +22,7 @@ class Handler {
   std::unique_ptr<Map<std::string, std::optional<std::string>>> data_;
   std::shared_ptr<Logger> logger_;
 
+  void DispatchRequest(int client_fd, const RespValue&) const;
   void HandleGetRequest(int client_fd, const GetRequest& request) const;
   void HandleSetRequest(int client_fd, const SetRequest& request) const;
   void HandleDelRequest(int client_fd, const DelRequest& request) const;

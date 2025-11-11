@@ -8,17 +8,38 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
-# It's better to define source files in variables
-set(APP_SOURCES
+set(RESPVALUE_SOURCES
         src/respvalue/RespValue.cpp
-        src/requests/GetRequest.cpp
-        src/Handler.cpp
-        src/requests/SetRequest.cpp
-        src/store/Hash.cpp
+        src/respvalue/RespValueQueue.cpp
         src/respvalue/RespValues.cpp
-        src/logging/FileLogger.cpp
-        src/requests/OneArgRequest.cpp
+)
+
+set(REQUEST_SOURCES
+        src/requests/GetRequest.cpp
+        src/requests/SetRequest.cpp
         src/requests/DelRequest.cpp
+        src/requests/OneArgRequest.cpp
+)
+
+set(STORE_SOURCES
+        src/store/Hash.cpp
+)
+
+set(LOGGING_SOURCES
+        src/logging/FileLogger.cpp
+)
+
+set(OTHER_SOURCES
+        src/Handler.cpp
+)
+
+# Consolidated application sources
+set(APP_SOURCES
+        ${RESPVALUE_SOURCES}
+        ${REQUEST_SOURCES}
+        ${STORE_SOURCES}
+        ${LOGGING_SOURCES}
+        ${OTHER_SOURCES}
 )
 
 # Main executable
@@ -26,8 +47,13 @@ add_executable(my_redis_server src/server.cpp ${APP_SOURCES})
 target_include_directories(my_redis_server PRIVATE src)
 
 # --- Testing ---
-# Only include tests if the TESTS option is ON (default)
-option(BUILD_TESTS "Build the tests" ON)
+# Only include tests if the TESTS option is ON (default: OFF)
+option(BUILD_TESTS "Build the tests" OFF)
+
+# Automatically enable tests for Debug builds unless the user explicitly disabled them.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
+    set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
+endif()
 
 if (BUILD_TESTS)
     include(FetchContent)

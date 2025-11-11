@@ -1,45 +1,38 @@
 #include "RespValueQueue.h"
 
+#include <cassert>
 #include <stdexcept>
 
-RespValueQueue::RespValueQueue() : valid_(false), value_(std::nullopt) {}
+RespValueQueue::RespValueQueue() {}
 
-bool RespValueQueue::PushString(const std::string& str) {
-  const size_t prev_size = buffer_.size();
+void RespValueQueue::PushString(const std::string& str) {
   buffer_.append(str);
 
-  if (IsValid()) return true;
-
   try {
-    auto [val, pos] = RespValue::FromString(buffer_);
-    // Successfully parsed a value that consumed 'pos' chars of buffer_.
-    value_ = std::move(val);
-    valid_ = true;
+    while (true) {
+      auto [val, pos] = RespValue::FromString(buffer_);
+      // Successfully parsed a value that consumed 'pos' chars of buffer_.
+      values_.push(std::move(val));
 
-    // Remove consumed prefix from buffer_
-    if (pos < buffer_.size()) {
-      buffer_ = buffer_.substr(pos);
-    } else {
-      buffer_.clear();
+      // Remove consumed prefix from buffer_
+      if (pos < buffer_.size()) {
+        buffer_ = buffer_.substr(pos);
+      } else {
+        buffer_.clear();
+      }
     }
-
-    return true;
   } catch (const std::out_of_range&) {
-    // Incomplete input: we consumed all of `str` into buffer but no complete
-    // value yet.
-    return false;
+    // Incomplete input: leave the partial data in buffer_ and wait for more.
+    return;
   }
   // let std::invalid_argument propagate to caller
 }
 
-bool RespValueQueue::IsValid() const { return valid_; }
+bool RespValueQueue::HasValue() const { return !values_.empty(); }
 
 RespValue RespValueQueue::PopValue() {
-  if (!valid_ || !value_.has_value()) {
-    throw std::runtime_error("No RespValue available");
-  }
-  valid_ = false;
-  RespValue ret = std::move(*value_);
-  value_.reset();
-  return ret;
+  assert(HasValue());
+  RespValue value = values_.front();
+  values_.pop();
+  return value;
 }
