@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "Handler.h"
-#include "logging/Logger.h"
+#include "logger/Logger.h"
 #include "respvalue/RespValue.h"
 
 class HandlerDispatcher {
@@ -12,7 +12,7 @@ class HandlerDispatcher {
   HandlerDispatcher(std::vector<std::unique_ptr<Handler>> handlers,
                     const std::shared_ptr<Logger>& logger);
 
-  void DispatchRequest(int client_fd, const RespValue&) const;
+  void DispatchRequest(int client_fd, const RespValue& resp_value) const;
 
  private:
   std::vector<std::unique_ptr<Handler>> handlers_;

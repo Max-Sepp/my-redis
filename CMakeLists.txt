@@ -28,7 +28,7 @@ set(STORE_SOURCES
 )
 
 set(LOGGING_SOURCES
-        src/logging/FileLogger.cpp
+        src/logger/FileLogger.cpp
 )
 
 set(HANDLER_SOURCES

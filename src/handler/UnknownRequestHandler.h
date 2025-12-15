@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "Handler.h"
-#include "logging/Logger.h"
+#include "logger/Logger.h"
 #include "store/Map.h"
 
 class UnknownRequestHandler final : public Handler {

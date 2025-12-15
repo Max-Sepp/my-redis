@@ -5,4 +5,4 @@ size_t string_hash(const std::string& key) {
   return hasher(key);
 }
 
-size_t int_hash(const int x) { return x; }
+size_t int_hash(const int key) { return key; }

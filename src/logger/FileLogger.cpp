@@ -74,16 +74,16 @@ std::string EscapeDelimitedChars(const std::string& input) {
 
 FileLogger::FileLogger(std::ostream& file_stream) : file_stream_(file_stream) {}
 
-void FileLogger::Log(const std::string& input) {
+void FileLogger::Log(const std::string& message) {
   this->file_stream_ << "LOG [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(input) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << std::endl;
 }
 
-void FileLogger::Debug(const std::string& input) {
+void FileLogger::Debug(const std::string& message) {
   this->file_stream_ << "DEBUG [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(input) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << std::endl;
 }
-void FileLogger::Error(const std::string& input) {
+void FileLogger::Error(const std::string& message) {
   this->file_stream_ << "ERROR [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(input) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << std::endl;
 }

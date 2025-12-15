@@ -4,12 +4,12 @@
 #include <memory>
 #include <string>
 
-#include "logging/Logger.h"
+#include "logger/Logger.h"
 
 const std::string INTERNAL_ERROR_RESP = "-ERR internal error\r\n";
 const std::string OK_RESP = "+OK\r\n";
 
 void SendResponse(int client_fd, const std::string& message,
-                  std::shared_ptr<Logger> logger);
+                  const std::shared_ptr<Logger>& logger);
 
 #endif  // HANDLER_HANDLERHELPERS_H

@@ -7,7 +7,7 @@
 
 #include "store/Map.h"
 
-#define DEFAULT_CAPACITY 16
+constexpr int DEFAULT_CAPACITY = 16;
 
 template <typename K, typename V>
 class StripedHashmap final : public Map<K, V> {
@@ -19,11 +19,11 @@ class StripedHashmap final : public Map<K, V> {
 
   StripedHashmap(const double load_factor,
                  std::function<size_t(const K &)> hash)
-      : StripedHashmap(load_factor, hash, DEFAULT_CAPACITY) {}
+      : StripedHashmap(load_factor, std::move(hash), DEFAULT_CAPACITY) {}
 
   StripedHashmap(const double load_factor,
                  std::function<size_t(const K &)> hash, const size_t num_locks)
-      : StripedHashmap({}, load_factor, hash, num_locks) {}
+      : StripedHashmap({}, load_factor, std::move(hash), num_locks) {}
 
   StripedHashmap(const std::vector<std::pair<K, V>> &initialData,
                  const double load_factor,
@@ -87,7 +87,7 @@ class StripedHashmap final : public Map<K, V> {
     K key;
     V value;
     std::unique_ptr<Entry> next;
-    Entry(const K &key, const V &value) : key(key), value(value) {}
+    Entry(K key, V value) : key(std::move(key)), value(std::move(value)) {}
   };
 
   std::function<size_t(const K &)> hash_;
@@ -124,7 +124,7 @@ class StripedHashmap final : public Map<K, V> {
     // Acquire all locks
     std::vector<std::unique_lock<std::recursive_mutex>> locks;
     locks.reserve(locks_.size());
-    for (std::recursive_mutex &l : locks_) locks.emplace_back(l);
+    for (std::recursive_mutex &lock : locks_) locks.emplace_back(lock);
 
     std::vector<std::pair<K, V>> flat_entries;
     for (auto &bucket : entries_) {

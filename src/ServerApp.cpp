@@ -12,7 +12,7 @@
 #include "handler/GetRequestHandler.h"
 #include "handler/SetRequestHandler.h"
 #include "handler/UnknownRequestHandler.h"
-#include "logging/FileLogger.h"
+#include "logger/FileLogger.h"
 #include "store/Hash.h"
 #include "store/Map.h"
 #include "store/StripedHashmap.h"

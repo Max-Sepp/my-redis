@@ -10,11 +10,11 @@ class FileLogger final : public Logger {
  public:
   explicit FileLogger(std::ostream& file_stream);
 
-  void Log(const std::string&) override;
+  void Log(const std::string& message) override;
 
-  void Debug(const std::string&) override;
+  void Debug(const std::string& message) override;
 
-  void Error(const std::string&) override;
+  void Error(const std::string& message) override;
 
  private:
   std::ostream& file_stream_;
