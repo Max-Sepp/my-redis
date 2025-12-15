@@ -3,11 +3,10 @@
 #include <cassert>
 #include <stdexcept>
 
-RespValueQueue::RespValueQueue() {}
+void RespValueQueue::PushString(const std::string& str) { buffer_.append(str); }
 
-void RespValueQueue::PushString(const std::string& str) {
-  buffer_.append(str);
-
+std::optional<RespValue> RespValueQueue::PopValue() {
+  // Try process anything on the string buffer.
   try {
     while (true) {
       auto [val, pos] = RespValue::FromString(buffer_);
@@ -21,17 +20,13 @@ void RespValueQueue::PushString(const std::string& str) {
         buffer_.clear();
       }
     }
-  } catch (const std::out_of_range&) {
+  } catch (const std::out_of_range&) {  // NOLINT(*-empty-catch)
     // Incomplete input: leave the partial data in buffer_ and wait for more.
-    return;
   }
   // let std::invalid_argument propagate to caller
-}
 
-bool RespValueQueue::HasValue() const { return !values_.empty(); }
+  if (values_.empty()) return std::nullopt;
 
-RespValue RespValueQueue::PopValue() {
-  assert(HasValue());
   RespValue value = values_.front();
   values_.pop();
   return value;

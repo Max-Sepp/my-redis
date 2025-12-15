@@ -1,7 +1,6 @@
 #include "RespValue.h"
 
 #include <cassert>
-#include <sstream>
 #include <stdexcept>
 
 RespValue::RespValue(RespVariant variant) : value_(std::move(variant)) {}
@@ -83,8 +82,7 @@ RespValue::RespBulkString RespValue::parseBulkString(const std::string& str,
   }
   // Ensure there's enough data for the bulk string content plus trailing CRLF.
   if (bulkStringLength < 0 ||
-      (static_cast<size_t>(pos) + static_cast<size_t>(bulkStringLength) + 2) >
-          str.size()) {
+      (pos + static_cast<size_t>(bulkStringLength) + 2) > str.size()) {
     throw std::out_of_range("Bulk string payload truncated or missing CRLF");
   }
   // Verify terminating CRLF after payload.
@@ -92,7 +90,8 @@ RespValue::RespBulkString RespValue::parseBulkString(const std::string& str,
       str[pos + bulkStringLength + 1] != '\n') {
     throw std::out_of_range("Bulk string missing terminating CRLF");
   }
-  std::string bulkString = str.substr(pos, static_cast<size_t>(bulkStringLength));
+  std::string bulkString =
+      str.substr(pos, static_cast<size_t>(bulkStringLength));
   pos += static_cast<size_t>(bulkStringLength) + 2;
   return bulkString;
 }

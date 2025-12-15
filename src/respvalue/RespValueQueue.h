@@ -9,7 +9,6 @@
 
 class RespValueQueue {
  public:
-  RespValueQueue();
   /* Append `str` to the internal buffer and attempt to parse zero or more
    * RespValue objects from the buffer. Parsed values are enqueued internally.
    *
@@ -26,12 +25,8 @@ class RespValueQueue {
    */
   void PushString(const std::string& str);
 
-  // Returns true if there is at least one parsed RespValue available to pop.
-  bool HasValue() const;
-
-  // Removes and returns the next parsed RespValue. Caller must ensure HasValue()
-  // is true before calling.
-  RespValue PopValue();
+  // Removes and returns the next parsed RespValue or null.
+  std::optional<RespValue> PopValue();
 
  private:
   std::string buffer_;

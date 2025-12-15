@@ -4,6 +4,8 @@ project(my-redis)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
@@ -29,8 +31,18 @@ set(LOGGING_SOURCES
         src/logging/FileLogger.cpp
 )
 
-set(OTHER_SOURCES
-        src/Handler.cpp
+set(HANDLER_SOURCES
+        src/handler/GetRequestHandler.cpp
+        src/handler/HandlerDispatcher.cpp
+        src/handler/HandlerHelpers.cpp
+        src/handler/SetRequestHandler.cpp
+        src/handler/DelRequestHandler.cpp
+        src/handler/UnknownRequestHandler.cpp
+)
+
+set(TOP_SOURCES
+        src/ServerApp.cpp
+        src/RequestExecutor.cpp
 )
 
 # Consolidated application sources
@@ -39,11 +51,12 @@ set(APP_SOURCES
         ${REQUEST_SOURCES}
         ${STORE_SOURCES}
         ${LOGGING_SOURCES}
-        ${OTHER_SOURCES}
+        ${HANDLER_SOURCES}
+        ${TOP_SOURCES}
 )
 
 # Main executable
-add_executable(my_redis_server src/server.cpp ${APP_SOURCES})
+add_executable(my_redis_server src/main.cpp ${APP_SOURCES})
 target_include_directories(my_redis_server PRIVATE src)
 
 # --- Testing ---
@@ -53,7 +66,7 @@ option(BUILD_TESTS "Build the tests" OFF)
 # Automatically enable tests for Debug builds unless the user explicitly disabled them.
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
     set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
-endif()
+endif ()
 
 if (BUILD_TESTS)
     include(FetchContent)
