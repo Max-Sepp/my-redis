@@ -31,7 +31,7 @@ OneArgRequest::OneArgRequest(const RespValue& resp_value,
   const auto& first_arg_string =
       std::get<RespValue::RespBulkString>(key.getValue());
 
-  if (!first_arg_string.has_value() || first_arg_string == "")
+  if (!first_arg_string.has_value() || first_arg_string->empty())
     throw std::invalid_argument("Key is not a valid key");
 
   first_arg_ = first_arg_string.value();
@@ -41,7 +41,7 @@ OneArgRequest::OneArgRequest(std::string request_type)
     : request_type_(std::move(request_type)) {}
 
 const std::string& OneArgRequest::getFirstArg() const {
-  if (first_arg_.empty()) return first_arg_;
+  if (!first_arg_.empty()) return first_arg_;
   throw std::runtime_error("Cannot get argument of IsRequest checker");
 }
 
@@ -66,7 +66,7 @@ bool OneArgRequest::IsRequest(const RespValue& resp_value) const {
     return false;
 
   const auto& key_string = std::get<RespValue::RespBulkString>(key.getValue());
-  if (!key_string.has_value() || !key_string->empty()) return false;
+  if (!key_string.has_value() || key_string->empty()) return false;
 
   return true;
 }

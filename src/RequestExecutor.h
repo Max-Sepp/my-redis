@@ -37,14 +37,15 @@ class RequestExecutor {
           DEFAULT_LOAD_FACTOR, int_hash);
 
   static void Worker(
-      std::shared_ptr<ConcurrentQueue<int>> client_fds_to_handle,
-      std::shared_ptr<HandlerDispatcher> dispatcher,
-      std::shared_ptr<StripedHashmap<int, std::shared_ptr<ClientConnection>>>
+      const std::shared_ptr<ConcurrentQueue<int>>& client_fds_to_handle,
+      const std::shared_ptr<HandlerDispatcher>& dispatcher,
+      const std::shared_ptr<
+          StripedHashmap<int, std::shared_ptr<ClientConnection>>>&
           client_fd_to_connection);
 
   static void HandleConnection(
       int client_fd, const std::shared_ptr<ClientConnection>& connection,
-      std::shared_ptr<HandlerDispatcher> dispatcher);
+      const std::shared_ptr<HandlerDispatcher>& dispatcher);
 };
 
 #endif  // MY_REDIS_REQUESTEXECUTOR_H

@@ -45,10 +45,10 @@ void RequestExecutor::Remove(const int client_fd) {
 }
 
 void RequestExecutor::Worker(
-    const std::shared_ptr<ConcurrentQueue<int>> client_fds_to_handle,
-    const std::shared_ptr<HandlerDispatcher> dispatcher,
+    const std::shared_ptr<ConcurrentQueue<int>>& client_fds_to_handle,
+    const std::shared_ptr<HandlerDispatcher>& dispatcher,
     const std::shared_ptr<
-        StripedHashmap<int, std::shared_ptr<ClientConnection>>>
+        StripedHashmap<int, std::shared_ptr<ClientConnection>>>&
         client_fd_to_connection) {
   while (true) {
     const int client_fd = client_fds_to_handle->Pop();
@@ -63,7 +63,7 @@ void RequestExecutor::Worker(
 
 void RequestExecutor::HandleConnection(
     const int client_fd, const std::shared_ptr<ClientConnection>& connection,
-    std::shared_ptr<HandlerDispatcher> dispatcher) {
+    const std::shared_ptr<HandlerDispatcher>& dispatcher) {
   std::scoped_lock lock(connection->queue_mutex_);
 
   for (std::optional<RespValue> maybe_resp_value =

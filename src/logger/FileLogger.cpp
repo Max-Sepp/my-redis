@@ -76,14 +76,14 @@ FileLogger::FileLogger(std::ostream& file_stream) : file_stream_(file_stream) {}
 
 void FileLogger::Log(const std::string& message) {
   this->file_stream_ << "LOG [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(message) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << "\n";
 }
 
 void FileLogger::Debug(const std::string& message) {
   this->file_stream_ << "DEBUG [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(message) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << "\n";
 }
 void FileLogger::Error(const std::string& message) {
   this->file_stream_ << "ERROR [" << GetTimeStamp()
-                     << "]: " << EscapeDelimitedChars(message) << std::endl;
+                     << "]: " << EscapeDelimitedChars(message) << "\n";
 }

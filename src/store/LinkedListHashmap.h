@@ -5,7 +5,7 @@
 
 #include "store/Map.h"
 
-#define DEFAULT_CAPACITY 16
+constexpr int DEFAULT_CAPACITY = 16;
 
 template <typename K, typename V>
 class LinkedListHashmap final : public Map<K, V> {
@@ -108,7 +108,7 @@ class LinkedListHashmap final : public Map<K, V> {
     K key;
     V value;
     std::unique_ptr<Entry> next;
-    Entry(const K &key, const V &value) : key(key), value(value) {}
+    Entry(K key, V value) : key(std::move(key)), value(std::move(value)) {}
   };
 
   std::function<size_t(const K &)> hash_;
