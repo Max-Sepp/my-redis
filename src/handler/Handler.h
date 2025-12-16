@@ -1,11 +1,7 @@
 #ifndef HANDLER_HANDLER_H
 #define HANDLER_HANDLER_H
 
-#include <memory>
-
-#include "logger/Logger.h"
 #include "respvalue/RespValue.h"
-#include "store/Map.h"
 
 class Handler {
  public:

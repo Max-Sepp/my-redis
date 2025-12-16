@@ -11,6 +11,7 @@
 #include "handler/DelRequestHandler.h"
 #include "handler/GetRequestHandler.h"
 #include "handler/SetRequestHandler.h"
+#include "handler/SubscribeRequestHandler.h"
 #include "handler/UnknownRequestHandler.h"
 #include "logger/FileLogger.h"
 #include "store/Hash.h"
@@ -27,11 +28,19 @@ ServerApp::ServerApp() {
   const auto store =
       std::make_shared<StripedHashmap<std::string, std::optional<std::string>>>(
           DEFAULT_LOAD_FACTOR, string_hash);
+  const auto pub_sub_channels = std::make_shared<PubSubChannels>(
+      std::make_unique<StripedHashmap<std::string, std::unordered_set<int>>>(
+          DEFAULT_CAPACITY, string_hash),
+      std::make_unique<StripedHashmap<int, std::unique_ptr<std::atomic_int>>>(
+          DEFAULT_CAPACITY, int_hash),
+      logger_);
 
   std::vector<std::unique_ptr<Handler>> handlers;
   handlers.push_back(std::make_unique<GetRequestHandler>(store, logger_));
   handlers.push_back(std::make_unique<SetRequestHandler>(store, logger_));
   handlers.push_back(std::make_unique<DelRequestHandler>(store, logger_));
+  handlers.push_back(
+      std::make_unique<SubscribeRequestHandler>(pub_sub_channels, logger_));
   handlers.push_back(std::make_unique<UnknownRequestHandler>(store, logger_));
 
   request_executor_ = std::make_unique<RequestExecutor>(

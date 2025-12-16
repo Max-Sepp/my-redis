@@ -1,6 +1,7 @@
 #ifndef MY_REDIS_HANDLER_H
 #define MY_REDIS_HANDLER_H
 
+#include <memory>
 #include <vector>
 
 #include "Handler.h"

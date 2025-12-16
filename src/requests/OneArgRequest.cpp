@@ -7,23 +7,26 @@ OneArgRequest::OneArgRequest(const RespValue& resp_value,
   request_type_ = request_type;
 
   if (!std::holds_alternative<RespValue::RespArray>(resp_value.getValue()))
-    throw std::invalid_argument(
-        "Get request resp must be an array containing GET and then the <key>");
+    throw std::invalid_argument(request_type +
+                                " request resp must be an array containing " +
+                                request_type + " and then the <key>");
 
   const auto& request_array =
       std::get<RespValue::RespArray>(resp_value.getValue());
 
   if (request_array.size() != 2)
-    throw std::invalid_argument(
-        "Get request resp must be an array containing GET and then the <key>");
+    throw std::invalid_argument(request_type +
+                                " request resp must be an array containing " +
+                                request_type + " and then the <key>");
 
   const RespValue& get = request_array[0];
   const RespValue& key = request_array[1];
 
   if (!(std::holds_alternative<RespValue::RespBulkString>(get.getValue()) &&
         std::get<RespValue::RespBulkString>(get.getValue()) == request_type_))
-    throw std::invalid_argument(
-        "Get request resp must be an array containing GET and then the <key>");
+    throw std::invalid_argument(request_type +
+                                " request resp must be an array containing " +
+                                request_type + " and then the <key>");
 
   if (!(std::holds_alternative<RespValue::RespBulkString>(key.getValue())))
     throw std::invalid_argument("Key is not a bulk string");
