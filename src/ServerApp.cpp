@@ -150,6 +150,7 @@ void ServerApp::handle_request(const int client_fd) const {
       epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, client_fd, nullptr);
       request_executor_->Remove(client_fd);
       close(client_fd);
+      logger_->Log("Client closed connection");
       return;
     }
   }

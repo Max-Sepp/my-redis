@@ -12,6 +12,7 @@ HandlerDispatcher::HandlerDispatcher(
 
 void HandlerDispatcher::DispatchRequest(const int client_fd,
                                         const RespValue& resp_value) const {
+  logger_->Log("Received: " + resp_value.serialize());
   for (const auto& handler : handlers_) {
     if (handler->IsHandler(resp_value)) {
       handler->Handle(client_fd, resp_value);
