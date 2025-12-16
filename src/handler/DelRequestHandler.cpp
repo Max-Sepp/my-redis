@@ -20,13 +20,7 @@ void DelRequestHandler::Handle(const int client_fd,
   SendResponse(client_fd, Integer(1).serialize(), logger_);
 }
 
-std::unique_ptr<Handler> DelRequestHandler::CreateHandler(
-    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
-    const std::shared_ptr<Logger>& logger) {
-  return std::make_unique<DelRequestHandler>(data, logger);
-}
-
 DelRequestHandler::DelRequestHandler(
-    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
-    const std::shared_ptr<Logger>& logger)
-    : data_(data), logger_(logger) {}
+    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data_,
+    const std::shared_ptr<Logger>& logger_)
+    : data_(data_), logger_(logger_) {}

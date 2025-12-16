@@ -29,10 +29,10 @@ ServerApp::ServerApp() {
           DEFAULT_LOAD_FACTOR, string_hash);
 
   std::vector<std::unique_ptr<Handler>> handlers;
-  handlers.push_back(GetRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(SetRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(DelRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(UnknownRequestHandler::CreateHandler(store, logger_));
+  handlers.push_back(std::make_unique<GetRequestHandler>(store, logger_));
+  handlers.push_back(std::make_unique<SetRequestHandler>(store, logger_));
+  handlers.push_back(std::make_unique<DelRequestHandler>(store, logger_));
+  handlers.push_back(std::make_unique<UnknownRequestHandler>(store, logger_));
 
   request_executor_ = std::make_unique<RequestExecutor>(
       std::make_unique<HandlerDispatcher>(std::move(handlers), logger_));
