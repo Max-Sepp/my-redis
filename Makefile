@@ -46,11 +46,11 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 CLANG_TIDY := run-clang-tidy
-BUILD_DIR := build/debug
+CLANG_BUILD_DIR := build/debug
 JOBS := $(shell nproc 2>/dev/null || echo 1)
 SRC_GLOBS := '*.c' '*.cc' '*.cpp' '*.cxx'
 
 clang-tidy:
 	git ls-files -z --cached --others --exclude-standard -- $(SRC_GLOBS) > /tmp/clang_tidy_files.$$; \
-	xargs -0 -n1000 $(CLANG_TIDY) -p $(BUILD_DIR) -j $(JOBS) < /tmp/clang_tidy_files.$$; \
+	xargs -0 -n1000 $(CLANG_TIDY) -p $(CLANG_BUILD_DIR) -j $(JOBS) < /tmp/clang_tidy_files.$$; \
 	rm -f /tmp/clang_tidy_files.$$
