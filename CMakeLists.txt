@@ -64,7 +64,7 @@ target_include_directories(my_redis_server PRIVATE src)
 option(BUILD_TESTS "Build the tests" OFF)
 
 # Automatically enable tests for Debug builds unless the user explicitly disabled them.
-if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR BUILD_TESTS)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
     set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
 endif ()
 
