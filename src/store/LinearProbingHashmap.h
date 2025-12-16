@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "Map.h"
-
-#define DEFAULT_CAPACITY 16
+#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {

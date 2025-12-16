@@ -4,8 +4,7 @@
 #include <functional>
 
 #include "store/Map.h"
-
-constexpr int DEFAULT_CAPACITY = 16;
+#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class LinkedListHashmap final : public Map<K, V> {

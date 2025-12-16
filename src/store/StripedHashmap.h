@@ -6,8 +6,7 @@
 #include <mutex>
 
 #include "store/Map.h"
-
-constexpr int DEFAULT_CAPACITY = 16;
+#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class StripedHashmap final : public Map<K, V> {
