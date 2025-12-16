@@ -91,7 +91,7 @@ if (BUILD_TESTS)
     )
     add_executable(map_tests
             tests/MapTests.cpp
-            ${APP_SOURCES}
+            ${STORE_SOURCES}
     )
 
     # Link the test executable against Google Test
