@@ -5,8 +5,9 @@ RequestExecutor::RequestExecutor(std::unique_ptr<HandlerDispatcher> dispatcher,
     : dispatcher_(std::move(dispatcher)) {
   assert(num_threads > 0);
   for (unsigned int i = 0; i < num_threads; i++) {
-    workers_.emplace_back(Worker, client_fds_to_handle_, dispatcher_,
-                          client_fd_to_connection_);
+    workers_.emplace_back(Worker, std::ref(client_fds_to_handle_),
+                          std::ref(dispatcher_),
+                          std::ref(client_fd_to_connection_));
   }
 }
 
@@ -16,16 +17,14 @@ RequestExecutor::RequestExecutor(std::unique_ptr<HandlerDispatcher> dispatcher)
                           ? 1U
                           : std::thread::hardware_concurrency()) {}
 
-void RequestExecutor::Submit(const int client_fd,
-                             const std::string& request) const {
+void RequestExecutor::Submit(const int client_fd, const std::string& request) {
   // Get the connection struct.
   std::shared_ptr<ClientConnection> connection = nullptr;
 
-  if (const auto connection_result =
-          client_fd_to_connection_->LookUp(client_fd);
+  if (const auto connection_result = client_fd_to_connection_.LookUp(client_fd);
       connection_result == nullptr) {
     connection = std::make_shared<ClientConnection>();
-    client_fd_to_connection_->Insert(client_fd, connection);
+    client_fd_to_connection_.Insert(client_fd, connection);
   } else {
     connection = *connection_result;
   }
@@ -37,7 +36,7 @@ void RequestExecutor::Submit(const int client_fd,
   }
 
   // Signal to threads potential processing of a client fd.
-  client_fds_to_handle_->Push(client_fd);
+  client_fds_to_handle_.Push(client_fd);
 }
 
 void RequestExecutor::Remove(const int client_fd) {
@@ -45,16 +44,15 @@ void RequestExecutor::Remove(const int client_fd) {
 }
 
 void RequestExecutor::Worker(
-    const std::shared_ptr<ConcurrentQueue<int>>& client_fds_to_handle,
-    const std::shared_ptr<HandlerDispatcher>& dispatcher,
-    const std::shared_ptr<
-        StripedHashmap<int, std::shared_ptr<ClientConnection>>>&
+    ConcurrentQueue<int>& client_fds_to_handle,
+    const std::unique_ptr<HandlerDispatcher>& dispatcher,
+    StripedHashmap<int, std::shared_ptr<ClientConnection>>&
         client_fd_to_connection) {
   while (true) {
-    const int client_fd = client_fds_to_handle->Pop();
+    const int client_fd = client_fds_to_handle.Pop();
 
     if (const auto connection_result =
-            client_fd_to_connection->LookUp(client_fd);
+            client_fd_to_connection.LookUp(client_fd);
         connection_result != nullptr) {
       HandleConnection(client_fd, *connection_result, dispatcher);
     }
@@ -63,7 +61,7 @@ void RequestExecutor::Worker(
 
 void RequestExecutor::HandleConnection(
     const int client_fd, const std::shared_ptr<ClientConnection>& connection,
-    const std::shared_ptr<HandlerDispatcher>& dispatcher) {
+    const std::unique_ptr<HandlerDispatcher>& dispatcher) {
   std::scoped_lock lock(connection->queue_mutex_);
 
   for (std::optional<RespValue> maybe_resp_value =
