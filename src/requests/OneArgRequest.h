@@ -7,7 +7,7 @@
 class OneArgRequest {
  public:
   OneArgRequest(const RespValue& resp_value, const std::string& request_type);
-  explicit OneArgRequest(const std::string& request_type);
+  explicit OneArgRequest(std::string request_type);
 
   [[nodiscard]] const std::string& getFirstArg() const;
   [[nodiscard]] bool IsRequest(const RespValue& resp_value) const;

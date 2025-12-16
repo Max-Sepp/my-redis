@@ -4,31 +4,72 @@ project(my-redis)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
-# It's better to define source files in variables
-set(APP_SOURCES
+set(RESPVALUE_SOURCES
         src/respvalue/RespValue.cpp
-        src/respvalue/RecvBufferIterator.cpp
-        src/requests/GetRequest.cpp
-        src/Handler.cpp
-        src/requests/SetRequest.cpp
-        src/store/Hash.cpp
+        src/respvalue/RespValueQueue.cpp
         src/respvalue/RespValues.cpp
-        src/logging/FileLogger.cpp
-        src/requests/OneArgRequest.cpp
+)
+
+set(REQUEST_SOURCES
+        src/requests/GetRequest.cpp
+        src/requests/SetRequest.cpp
         src/requests/DelRequest.cpp
+        src/requests/OneArgRequest.cpp
+)
+
+set(STORE_SOURCES
+        src/store/Hash.cpp
+)
+
+set(LOGGING_SOURCES
+        src/logger/FileLogger.cpp
+)
+
+set(HANDLER_SOURCES
+        src/handler/GetRequestHandler.cpp
+        src/handler/HandlerDispatcher.cpp
+        src/handler/HandlerHelpers.cpp
+        src/handler/SetRequestHandler.cpp
+        src/handler/DelRequestHandler.cpp
+        src/handler/UnknownRequestHandler.cpp
+)
+
+set(TOP_SOURCES
+        src/ServerApp.cpp
+        src/RequestExecutor.cpp
+)
+
+# Consolidated application sources
+set(APP_SOURCES
+        ${RESPVALUE_SOURCES}
+        ${REQUEST_SOURCES}
+        ${STORE_SOURCES}
+        ${LOGGING_SOURCES}
+        ${HANDLER_SOURCES}
+        ${TOP_SOURCES}
 )
 
 # Main executable
-add_executable(my_redis_server src/server.cpp ${APP_SOURCES})
+add_executable(my_redis_server src/main.cpp ${APP_SOURCES})
 target_include_directories(my_redis_server PRIVATE src)
 
 # --- Testing ---
-# Only include tests if the TESTS option is ON (default)
-option(BUILD_TESTS "Build the tests" ON)
+# Only include tests if the TESTS option is ON (default: OFF)
+option(BUILD_TESTS "Build the tests" OFF)
+
+# Automatically enable tests for Debug builds unless the user explicitly disabled them.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
+    set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
+endif ()
+
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "BUILD_TESTS = ${BUILD_TESTS}")
 
 if (BUILD_TESTS)
     include(FetchContent)
@@ -46,11 +87,11 @@ if (BUILD_TESTS)
     # Add the test executable with its own sources plus the library sources
     add_executable(parser_tests
             tests/ParserTests.cpp
-            ${APP_SOURCES}
+            src/respvalue/RespValue.cpp
     )
     add_executable(map_tests
             tests/MapTests.cpp
-            ${APP_SOURCES}
+            ${STORE_SOURCES}
     )
 
     # Link the test executable against Google Test

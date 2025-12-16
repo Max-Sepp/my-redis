@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "Map.h"
-
-#define DEFAULT_CAPACITY 16
+#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {
@@ -63,7 +62,7 @@ class LinearProbingHashmap final : public Map<K, V> {
   LinearProbingHashmap(const double load_factor,
                        std::function<size_t(const K &)> hash,
                        const size_t initial_capacity = DEFAULT_CAPACITY) {
-    this->hash_ = hash;
+    this->hash_ = std::move(hash);
     this->load_factor_ = load_factor;
     this->entries_ = std::vector<Entry>(
         initial_capacity,

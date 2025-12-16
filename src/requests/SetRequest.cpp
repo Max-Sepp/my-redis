@@ -66,7 +66,7 @@ bool SetRequest::IsRequest(const RespValue& resp_value) {
 
   const auto& key_optional_string =
       std::get<RespValue::RespBulkString>(key.getValue());
-  if (!key_optional_string.has_value() || key_optional_string == "")
+  if (!key_optional_string.has_value() || key_optional_string->empty())
     return false;
 
   return true;

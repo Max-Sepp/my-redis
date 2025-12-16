@@ -10,7 +10,7 @@ class RespParsingTest : public ::testing::Test {
 
 // Simple String Tests
 TEST_F(RespParsingTest, ParseSimpleString) {
-  const RespValue resp("+OK\r\n");
+  const RespValue resp = RespValue::FromString("+OK\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -18,7 +18,7 @@ TEST_F(RespParsingTest, ParseSimpleString) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleStringEmpty) {
-  const RespValue resp("+\r\n");
+  const RespValue resp = RespValue::FromString("+\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -26,7 +26,7 @@ TEST_F(RespParsingTest, ParseSimpleStringEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleStringWithSpaces) {
-  const RespValue resp("+Hello World\r\n");
+  const RespValue resp = RespValue::FromString("+Hello World\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -35,7 +35,7 @@ TEST_F(RespParsingTest, ParseSimpleStringWithSpaces) {
 
 // Simple Error Tests
 TEST_F(RespParsingTest, ParseSimpleError) {
-  const RespValue resp("-Error message\r\n");
+  const RespValue resp = RespValue::FromString("-Error message\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -44,7 +44,7 @@ TEST_F(RespParsingTest, ParseSimpleError) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleErrorEmpty) {
-  const RespValue resp("-\r\n");
+  const RespValue resp = RespValue::FromString("-\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -52,7 +52,8 @@ TEST_F(RespParsingTest, ParseSimpleErrorEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleErrorComplex) {
-  const RespValue resp("-ERR unknown command 'foobar'\r\n");
+  const RespValue resp =
+      RespValue::FromString("-ERR unknown command 'foobar'\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -62,7 +63,7 @@ TEST_F(RespParsingTest, ParseSimpleErrorComplex) {
 
 // Integer Tests
 TEST_F(RespParsingTest, ParseIntegerPositive) {
-  const RespValue resp(":1000\r\n");
+  const RespValue resp = RespValue::FromString(":1000\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -70,7 +71,7 @@ TEST_F(RespParsingTest, ParseIntegerPositive) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerNegative) {
-  const RespValue resp(":-1000\r\n");
+  const RespValue resp = RespValue::FromString(":-1000\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -78,7 +79,7 @@ TEST_F(RespParsingTest, ParseIntegerNegative) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerZero) {
-  const RespValue resp(":0\r\n");
+  const RespValue resp = RespValue::FromString(":0\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -86,7 +87,8 @@ TEST_F(RespParsingTest, ParseIntegerZero) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerMaxValue) {
-  const RespValue resp(":9223372036854775807\r\n");  // max int64_t
+  const RespValue resp =
+      RespValue::FromString(":9223372036854775807\r\n").first;  // max int64_t
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -94,7 +96,8 @@ TEST_F(RespParsingTest, ParseIntegerMaxValue) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerMinValue) {
-  const RespValue resp(":-922337203685477580\r\n");  // min int64_t
+  const RespValue resp =
+      RespValue::FromString(":-922337203685477580\r\n").first;  // min int64_t
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -103,7 +106,7 @@ TEST_F(RespParsingTest, ParseIntegerMinValue) {
 
 // Bulk String Tests
 TEST_F(RespParsingTest, ParseBulkStringNormal) {
-  const RespValue resp("$6\r\nfoobar\r\n");
+  const RespValue resp = RespValue::FromString("$6\r\nfoobar\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -113,7 +116,7 @@ TEST_F(RespParsingTest, ParseBulkStringNormal) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringEmpty) {
-  const RespValue resp("$0\r\n\r\n");
+  const RespValue resp = RespValue::FromString("$0\r\n\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -123,7 +126,7 @@ TEST_F(RespParsingTest, ParseBulkStringEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringNull) {
-  const RespValue resp("$-1\r\n");
+  const RespValue resp = RespValue::FromString("$-1\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -132,7 +135,7 @@ TEST_F(RespParsingTest, ParseBulkStringNull) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringWithNewlines) {
-  const RespValue resp("$12\r\nhello\r\nworld\r\n");
+  const RespValue resp = RespValue::FromString("$12\r\nhello\r\nworld\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -143,7 +146,7 @@ TEST_F(RespParsingTest, ParseBulkStringWithNewlines) {
 
 // Array Tests
 TEST_F(RespParsingTest, ParseArrayEmpty) {
-  const RespValue resp("*0\r\n");
+  const RespValue resp = RespValue::FromString("*0\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -152,7 +155,8 @@ TEST_F(RespParsingTest, ParseArrayEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseArrayTwoStrings) {
-  const RespValue resp("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
+  const RespValue resp =
+      RespValue::FromString("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -171,7 +175,7 @@ TEST_F(RespParsingTest, ParseArrayTwoStrings) {
 }
 
 TEST_F(RespParsingTest, ParseArrayMixedTypes) {
-  const RespValue resp("*3\r\n:1\r\n:2\r\n:3\r\n");
+  const RespValue resp = RespValue::FromString("*3\r\n:1\r\n:2\r\n:3\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -186,7 +190,8 @@ TEST_F(RespParsingTest, ParseArrayMixedTypes) {
 }
 
 TEST_F(RespParsingTest, ParseArrayWithNullElements) {
-  RespValue resp("*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n");
+  RespValue resp =
+      RespValue::FromString("*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -210,7 +215,9 @@ TEST_F(RespParsingTest, ParseArrayWithNullElements) {
 }
 
 TEST_F(RespParsingTest, ParseNestedArray) {
-  const RespValue resp("*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n");
+  const RespValue resp = RespValue::FromString(
+                             "*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n")
+                             .first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -232,28 +239,29 @@ TEST_F(RespParsingTest, ParseNestedArray) {
 
 // Edge Cases and Error Handling
 TEST_F(RespParsingTest, ParseInvalidTypePrefix) {
-  EXPECT_THROW(RespValue("@invalid\r\n"), std::invalid_argument);
+  EXPECT_THROW(RespValue::FromString("@invalid\r\n"), std::invalid_argument);
 }
 
 TEST_F(RespParsingTest, ParseMissingCRLF) {
-  EXPECT_THROW(RespValue("+OK"), std::out_of_range);
+  EXPECT_THROW(RespValue::FromString("+OK"), std::out_of_range);
 }
 
 TEST_F(RespParsingTest, ParseInvalidInteger) {
-  EXPECT_THROW(RespValue(":not_a_number\r\n"), std::invalid_argument);
+  EXPECT_THROW(RespValue::FromString(":not_a_number\r\n"),
+               std::invalid_argument);
 }
 
 TEST_F(RespParsingTest, ParseBulkStringLengthMismatch) {
-  EXPECT_THROW(RespValue("$6\r\nfoo\r\n"),
+  EXPECT_THROW(RespValue::FromString("$6\r\nfoo\r\n"),
                std::out_of_range);  // length says 6 but only 3 chars
 }
 
 TEST_F(RespParsingTest, ParseNegativeBulkStringLengthNotMinusOne) {
-  EXPECT_THROW(RespValue("$-2\r\n"), std::invalid_argument);
+  EXPECT_THROW(RespValue::FromString("$-2\r\n"), std::invalid_argument);
 }
 
 TEST_F(RespParsingTest, ParseArrayCountMismatch) {
-  EXPECT_THROW(RespValue("*2\r\n$3\r\nfoo\r\n"),
+  EXPECT_THROW(RespValue::FromString("*2\r\n$3\r\nfoo\r\n"),
                std::out_of_range);  // says 2 elements but only 1
 }
 
@@ -265,48 +273,51 @@ class RespSerializeTests : public ::testing::Test {
 
 // Simple String
 TEST(RespSerializeTests, SimpleString) {
-  const RespValue value("+OK\r\n");
+  const RespValue value = RespValue::FromString("+OK\r\n").first;
   EXPECT_EQ(value.serialize(), "+OK\r\n");
 }
 
 // Simple Error
 TEST(RespSerializeTests, SimpleError) {
-  const RespValue value(RespValue::RespSimpleError{"ERR unknown command"});
+  const RespValue value =
+      RespValue::FromVariant(RespValue::RespSimpleError{"ERR unknown command"});
   EXPECT_EQ(value.serialize(), "-ERR unknown command\r\n");
 }
 
 // Integer
 TEST(RespSerializeTests, Integer) {
-  const RespValue value(static_cast<RespValue::RespInteger>(42));
+  const RespValue value =
+      RespValue::FromVariant(static_cast<RespValue::RespInteger>(42));
   EXPECT_EQ(value.serialize(), ":42\r\n");
 }
 
 // Bulk String (non-null)
 TEST(RespSerializeTests, BulkString) {
-  const RespValue value(
+  const RespValue value = RespValue::FromVariant(
       RespValue::RespBulkString(std::make_optional<std::string>("foobar")));
   EXPECT_EQ(value.serialize(), "$6\r\nfoobar\r\n");
 }
 
 // Bulk String (null)
 TEST(RespSerializeTests, BulkStringNull) {
-  const RespValue value{RespValue::RespBulkString(std::nullopt)};
+  const RespValue value =
+      RespValue::FromVariant(RespValue::RespBulkString(std::nullopt));
   EXPECT_EQ(value.serialize(), "$-1\r\n");
 }
 
 // Array (empty)
 TEST(RespSerializeTests, ArrayEmpty) {
-  const RespValue value(RespValue::RespArray{});
+  const RespValue value = RespValue::FromVariant(RespValue::RespArray{});
   EXPECT_EQ(value.serialize(), "*0\r\n");
 }
 
 // Array (with elements)
 TEST(RespSerializeTests, ArrayWithElements) {
   RespValue::RespArray arr;
-  arr.emplace_back("+foo\r\n");
-  arr.emplace_back(static_cast<RespValue::RespInteger>(123));
-  arr.emplace_back(
-      RespValue::RespBulkString(std::make_optional<std::string>("bar")));
-  const RespValue value(arr);
+  arr.emplace_back(RespValue::FromString("+foo\r\n").first);
+  arr.emplace_back(RespValue::FromVariant(static_cast<RespValue::RespInteger>(123)));
+  arr.emplace_back(RespValue::FromVariant(
+      RespValue::RespBulkString(std::make_optional<std::string>("bar"))));
+  const RespValue value = RespValue::FromVariant(arr);
   EXPECT_EQ(value.serialize(), "*3\r\n+foo\r\n:123\r\n$3\r\nbar\r\n");
 }

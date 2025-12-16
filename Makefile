@@ -36,7 +36,7 @@ run-tests: debug
 	  echo "==> Running map_tests"; $$bdir/map_tests || exit $$?; \
 	else echo "map_tests not found in $$bdir"; fi
 
-tests: run-tests
+test: run-tests
 
 run: debug
 	$(BUILD_DIR)/$(PRESET_DEBUG)/my_redis_server
@@ -44,3 +44,13 @@ run: debug
 clean:
 	@echo "Removing $(BUILD_DIR)/"
 	rm -rf $(BUILD_DIR)
+
+CLANG_TIDY := run-clang-tidy
+CLANG_BUILD_DIR := build/debug
+JOBS := $(shell nproc 2>/dev/null || echo 1)
+SRC_GLOBS := '*.c' '*.cc' '*.cpp' '*.cxx'
+
+clang-tidy:
+	git ls-files -z --cached --others --exclude-standard -- $(SRC_GLOBS) > /tmp/clang_tidy_files.$$; \
+	xargs -0 -n1000 $(CLANG_TIDY) -p $(CLANG_BUILD_DIR) -j $(JOBS) < /tmp/clang_tidy_files.$$; \
+	rm -f /tmp/clang_tidy_files.$$

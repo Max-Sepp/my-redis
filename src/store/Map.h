@@ -3,6 +3,8 @@
 
 #include <memory>
 
+constexpr double DEFAULT_LOAD_FACTOR = 0.75;
+
 template <typename K, typename V>
 class Map {
  public:
