@@ -36,7 +36,7 @@ run-tests: debug
 	  echo "==> Running map_tests"; $$bdir/map_tests || exit $$?; \
 	else echo "map_tests not found in $$bdir"; fi
 
-tests: run-tests
+test: run-tests
 
 run: debug
 	$(BUILD_DIR)/$(PRESET_DEBUG)/my_redis_server
