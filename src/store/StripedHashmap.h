@@ -72,32 +72,16 @@ class StripedHashmap final : public Map<K, V> {
   }
 
  public:
-  StripedHashmap(const std::vector<std::pair<K, V>> &initialData,
-                 const double load_factor,
-                 std::function<size_t(const K &)> hash)
-      : StripedHashmap(initialData, load_factor, hash, DEFAULT_CAPACITY) {}
-
   StripedHashmap(const double load_factor,
                  std::function<size_t(const K &)> hash)
       : StripedHashmap(load_factor, std::move(hash), DEFAULT_CAPACITY) {}
 
   StripedHashmap(const double load_factor,
                  std::function<size_t(const K &)> hash, const size_t num_locks)
-      : StripedHashmap({}, load_factor, std::move(hash), num_locks) {}
-
-  StripedHashmap(const std::vector<std::pair<K, V>> &initialData,
-                 const double load_factor,
-                 std::function<size_t(const K &)> hash, const size_t num_locks)
-      : hash_(std::move(hash)), load_factor_(load_factor), locks_(num_locks) {
-    size_t cap = std::max(
-        static_cast<size_t>(2),
-        std::max(initialData.size() * 2,
-                 static_cast<size_t>(initialData.size() / load_factor)));
-    this->entries_.resize(cap);
-    for (const auto &[key, value] : initialData) {
-      this->Insert(key, value);
-    }
-  }
+      : hash_(std::move(hash)),
+        entries_(std::vector<std::unique_ptr<Entry>>(DEFAULT_CAPACITY)),
+        load_factor_(load_factor),
+        locks_(std::vector<std::recursive_mutex>(num_locks)) {}
 
   std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
     std::lock_guard lock(locks_[GetLockIndex(key)]);

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <functional>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 #include "Map.h"
@@ -12,6 +13,10 @@ template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {
   enum State { empty, deleted, element };
   struct Entry {
+    Entry() : state(empty), key(std::nullopt), value(std::nullopt) {};
+    Entry(const State state, const std::optional<K> &key,
+          const std::optional<V> &value)
+        : state(state), key(key), value(value) {}
     State state;
     std::optional<K> key;
     std::optional<V> value;
@@ -24,6 +29,7 @@ class LinearProbingHashmap final : public Map<K, V> {
 
  public:
   LinearProbingHashmap(const LinearProbingHashmap &other)
+    requires std::is_copy_constructible_v<K> && std::is_copy_constructible_v<V>
       : Map<K, V>(other),
         hash_(other.hash_),
         load_factor_(other.load_factor_),
@@ -37,7 +43,9 @@ class LinearProbingHashmap final : public Map<K, V> {
         entries_(std::move(other.entries_)),
         size_(other.size_) {}
 
-  LinearProbingHashmap &operator=(const LinearProbingHashmap &other) {
+  LinearProbingHashmap &operator=(const LinearProbingHashmap &other)
+    requires std::is_copy_constructible_v<K> && std::is_copy_constructible_v<V>
+  {
     if (this == &other) return *this;
     Map<K, V>::operator=(other);
     hash_ = other.hash_;
@@ -62,26 +70,7 @@ class LinearProbingHashmap final : public Map<K, V> {
                        const size_t initial_capacity = DEFAULT_CAPACITY) {
     this->hash_ = std::move(hash);
     this->load_factor_ = load_factor;
-    this->entries_ = std::vector<Entry>(
-        initial_capacity,
-        Entry{.state = empty, .key = std::nullopt, .value = std::nullopt});
-  }
-
-  LinearProbingHashmap(const std::vector<std::pair<K, V>> &initial_data,
-                       const double load_factor,
-                       std::function<size_t(const K &)> hash) {
-    this->hash_ = hash;
-    this->load_factor_ = load_factor;
-    this->entries_ = std::vector<Entry>(
-        std::max(
-            static_cast<size_t>(2),
-            std::max(initial_data.size_() * 2,
-                     static_cast<size_t>(initial_data.size_() / load_factor))),
-        Entry{.state = empty});
-
-    for (const auto &[key, value] : initial_data) {
-      this->insert(key, value);
-    }
+    this->entries_ = std::vector<Entry>(initial_capacity);
   }
 
   std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
@@ -127,13 +116,12 @@ class LinearProbingHashmap final : public Map<K, V> {
   }
 
   void Resize() {
-    std::vector<Entry> old_entries = entries_;
+    std::vector<Entry> old_entries = std::move(entries_);
 
     entries_ = std::vector<Entry>(
-        std::max(static_cast<size_t>(2), old_entries.size() * 2),
-        Entry{.state = empty, .key = std::nullopt, .value = std::nullopt});
+        std::max(static_cast<size_t>(2), old_entries.size() * 2));
 
-    for (const Entry &entry : old_entries) {
+    for (Entry &entry : old_entries) {
       if (entry.state != element) continue;
 
       assert(entry.key.has_value() && entry.value.has_value());

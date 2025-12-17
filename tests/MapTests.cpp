@@ -255,5 +255,77 @@ TEST(MapBenchmark, CompareImplementations) {
   std::cout << "[==========] Finished MapBenchmark." << "\n";
 }
 
-// End suppression for magic-number warnings
-// NOLINTEND(readability-magic-numbers)
+// Additional tests: use std::unique_ptr<std::string> as the mapped value
+
+struct LinearProbingHashmapStringUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        LinearProbingHashmap<std::string, std::unique_ptr<std::string>>>(
+        DEFAULT_LOAD_FACTOR, string_hash, 2);
+  }
+};
+
+struct LinkedListHashmapStringUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        LinkedListHashmap<std::string, std::unique_ptr<std::string>>>(
+        DEFAULT_LOAD_FACTOR, string_hash);
+  }
+};
+
+struct StandardMapUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        StandardMap<std::string, std::unique_ptr<std::string>>>();
+  }
+};
+
+struct StripedHashmapUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        StripedHashmap<std::string, std::unique_ptr<std::string>>>(
+        DEFAULT_LOAD_FACTOR, string_hash);
+  }
+};
+
+template <typename MapFactory>
+class MapTestUniquePtr : public ::testing::Test {
+ protected:
+  void SetUp() override { map = MapFactory::create(); }
+
+  std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>> map;
+};
+
+using ImplementationsUniquePtr = ::testing::Types<
+    LinearProbingHashmapStringUniquePtrFactory, StandardMapUniquePtrFactory,
+    LinkedListHashmapStringUniquePtrFactory, StripedHashmapUniquePtrFactory>;
+
+TYPED_TEST_SUITE(MapTestUniquePtr, ImplementationsUniquePtr);
+
+TYPED_TEST(MapTestUniquePtr, InsertAndLookUpUniquePtr) {
+  auto value = std::make_unique<std::string>("hello");
+  this->map->Insert(std::string("one"), std::move(value));
+  EXPECT_EQ(value, nullptr);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(*opt->get(), "hello");
+}
+
+TYPED_TEST(MapTestUniquePtr, UpdateValueUniquePtr) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("first"));
+  this->map->Insert(std::string("one"),
+                    std::make_unique<std::string>("second"));
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(*opt->get(), "second");
+}
+
+TYPED_TEST(MapTestUniquePtr, RemoveAndLookUp) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("x"));
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
+}

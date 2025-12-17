@@ -54,7 +54,7 @@ class LinkedListHashmap final : public Map<K, V> {
     entries_.clear();
     entries_.resize(std::max(static_cast<size_t>(2), size_ * 2));
     size_ = 0;
-    for (const auto &[key, value] : flat_entries) {
+    for (auto &[key, value] : flat_entries) {
       InsertWithoutResize(std::move(key), std::move(value));
     }
   }
@@ -98,21 +98,6 @@ class LinkedListHashmap final : public Map<K, V> {
     this->hash_ = hash;
     this->load_factor_ = loadFactor;
     this->entries_.resize(DEFAULT_CAPACITY);
-  }
-
-  LinkedListHashmap(const std::vector<std::pair<K, V>> &initialData,
-                    const double loadFactor,
-                    std::function<size_t(const K &)> hash) {
-    this->hash_ = hash;
-    this->load_factor_ = loadFactor;
-    size_t cap = std::max(
-        static_cast<size_t>(2),
-        std::max(initialData.size_() * 2,
-                 static_cast<size_t>(initialData.size_() / loadFactor)));
-    this->entries.resize(cap);
-    for (const auto &[key, value] : initialData) {
-      this->insert(key, value);
-    }
   }
 
   std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
