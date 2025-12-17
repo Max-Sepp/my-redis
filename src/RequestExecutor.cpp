@@ -22,11 +22,11 @@ void RequestExecutor::Submit(const int client_fd, const std::string& request) {
   std::shared_ptr<ClientConnection> connection = nullptr;
 
   if (const auto connection_result = client_fd_to_connection_.LookUp(client_fd);
-      connection_result == nullptr) {
+      !connection_result.has_value()) {
     connection = std::make_shared<ClientConnection>();
     client_fd_to_connection_.Insert(client_fd, connection);
   } else {
-    connection = *connection_result;
+    connection = connection_result->get();
   }
 
   // Add the request to the queue.
@@ -53,8 +53,8 @@ void RequestExecutor::Worker(
 
     if (const auto connection_result =
             client_fd_to_connection.LookUp(client_fd);
-        connection_result != nullptr) {
-      HandleConnection(client_fd, *connection_result, dispatcher);
+        connection_result.has_value()) {
+      HandleConnection(client_fd, connection_result->get(), dispatcher);
     }
   }
 }

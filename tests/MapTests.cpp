@@ -16,14 +16,14 @@ struct LinearProbingHashmapStringIntFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
     // Use small initial capacity to make resize easier to trigger in tests
     return std::make_unique<LinearProbingHashmap<std::string, int>>(
-        0.75, string_hash, 2);
+        DEFAULT_LOAD_FACTOR, string_hash, 2);
   }
 };
 
 struct LinkedListHashmapStringIntFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
-    return std::make_unique<LinkedListHashmap<std::string, int>>(0.75,
-                                                                 string_hash);
+    return std::make_unique<LinkedListHashmap<std::string, int>>(
+        DEFAULT_LOAD_FACTOR, string_hash);
   }
 };
 
@@ -35,8 +35,8 @@ struct StandardMapFactory {
 
 struct StripedHashmapFactory {
   static std::unique_ptr<Map<std::string, int>> create() {
-    return std::make_unique<StripedHashmap<std::string, int>>(0.75,
-                                                              string_hash);
+    return std::make_unique<StripedHashmap<std::string, int>>(
+        DEFAULT_LOAD_FACTOR, string_hash);
   }
 };
 
@@ -57,65 +57,64 @@ using Implementations =
 TYPED_TEST_SUITE(MapTest, Implementations);
 
 TYPED_TEST(MapTest, InsertAndLookUp) {
-  this->map->Insert("one", 1);
-  const std::unique_ptr<int> value = this->map->LookUp("one");
-  ASSERT_NE(value, nullptr);
-  EXPECT_EQ(*value, 1);
+  this->map->Insert(std::string("one"), 1);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(opt->get(), 1);
 }
 
 TYPED_TEST(MapTest, LookUpNonExistent) {
-  const std::unique_ptr<int> value = this->map->LookUp("nonexistent");
-  EXPECT_EQ(value, nullptr);
+  auto opt = this->map->LookUp(std::string("nonexistent"));
+  EXPECT_FALSE(opt.has_value());
 }
 
 TYPED_TEST(MapTest, InsertRemoveLookUp) {
-  this->map->Insert("one", 1);
-  this->map->Remove("one");
-  const std::unique_ptr<int> value = this->map->LookUp("one");
-  EXPECT_EQ(value, nullptr);
+  this->map->Insert(std::string("one"), 1);
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
 }
 
 TYPED_TEST(MapTest, RemoveNonExistent) {
-  ASSERT_NO_THROW(this->map->Remove("nonexistent"));
+  ASSERT_NO_THROW(this->map->Remove(std::string("nonexistent")));
 }
 
 TYPED_TEST(MapTest, UpdateValue) {
-  this->map->Insert("one", 1);
-  this->map->Insert("one", 100);
-  const std::unique_ptr<int> value = this->map->LookUp("one");
-  ASSERT_NE(value, nullptr);
-  EXPECT_EQ(*value, 100);
+  this->map->Insert(std::string("one"), 1);
+  constexpr int kUpdatedValue = 100;
+  this->map->Insert(std::string("one"), kUpdatedValue);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(opt->get(), kUpdatedValue);
 }
 
 TYPED_TEST(MapTest, MultipleInsertions) {
-  this->map->Insert("one", 1);
-  this->map->Insert("two", 2);
-  this->map->Insert("three", 3);
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+  this->map->Insert(std::string("three"), 3);
 
-  const std::unique_ptr<int> value_one = this->map->LookUp("one");
-  ASSERT_NE(value_one, nullptr);
-  EXPECT_EQ(*value_one, 1);
+  const auto value_one = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(value_one.has_value());
+  EXPECT_EQ(value_one->get(), 1);
 
-  const std::unique_ptr<int> value_two = this->map->LookUp("two");
-  ASSERT_NE(value_two, nullptr);
-  EXPECT_EQ(*value_two, 2);
+  const auto value_two = this->map->LookUp(std::string("two"));
+  ASSERT_TRUE(value_two.has_value());
+  EXPECT_EQ(value_two->get(), 2);
 
-  const std::unique_ptr<int> value_three = this->map->LookUp("three");
-  ASSERT_NE(value_three, nullptr);
-  EXPECT_EQ(*value_three, 3);
+  const auto value_three = this->map->LookUp(std::string("three"));
+  ASSERT_TRUE(value_three.has_value());
+  EXPECT_EQ(value_three->get(), 3);
 }
 
 TYPED_TEST(MapTest, OperationsAreIsolated) {
-  this->map->Insert("one", 1);
-  this->map->Insert("two", 2);
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
 
-  this->map->Remove("one");
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
 
-  EXPECT_EQ(this->map->LookUp("one"), nullptr);
-
-  const std::unique_ptr<int> value_two = this->map->LookUp("two");
-  ASSERT_NE(value_two, nullptr);
-  EXPECT_EQ(*value_two, 2);
+  const auto value_two = this->map->LookUp(std::string("two"));
+  ASSERT_TRUE(value_two.has_value());
+  EXPECT_EQ(value_two->get(), 2);
 }
 
 // Performance-based tests: do not rely on internals. These tests will fail
@@ -124,61 +123,64 @@ TYPED_TEST(MapTest, OperationsAreIsolated) {
 TYPED_TEST(MapTest, BulkInsertPerformance) {
   // Skip very small runs for StandardMap as its behaviour is fine; we still
   // want to run the test for all implementations.
-  constexpr size_t N = 10000;
+  constexpr size_t kNumElements = 10000;
   using clock = std::chrono::high_resolution_clock;
 
   const auto start = clock::now();
-  for (size_t i = 0; i < N; ++i) {
+  for (size_t i = 0; i < kNumElements; ++i) {
     this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
 
-  // If inserting N elements takes longer than 200 ms, consider it a failure.
+  // If inserting kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
   EXPECT_LT(duration.count(), 200)
       << "Bulk insert too slow: " << duration.count() << " ms";
 }
 
 TYPED_TEST(MapTest, BulkLookupPerformance) {
-  constexpr size_t N = 10000;
+  constexpr size_t kNumElements = 10000;
   using clock = std::chrono::high_resolution_clock;
 
   // Ensure the map is populated.
-  for (size_t i = 0; i < N; ++i) {
+  for (size_t i = 0; i < kNumElements; ++i) {
     this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
 
   auto start = clock::now();
-  for (size_t i = 0; i < N; ++i) {
-    const auto v = this->map->LookUp(std::to_string(i));
-    ASSERT_NE(v, nullptr);
-    EXPECT_EQ(*v, static_cast<int>(i));
+  for (size_t i = 0; i < kNumElements; ++i) {
+    const auto value = this->map->LookUp(std::to_string(i));
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(value->get(), static_cast<int>(i));
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
 
-  // If looking up N elements takes longer than 200 ms, consider it a failure.
+  // If looking up kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
   EXPECT_LT(duration.count(), 200)
       << "Bulk lookup too slow: " << duration.count() << " ms";
 }
 
 TYPED_TEST(MapTest, BulkRemovePerformance) {
-  constexpr size_t N = 10000;
+  constexpr size_t kNumElements = 10000;
   using clock = std::chrono::high_resolution_clock;
 
   // Ensure the map is populated.
-  for (size_t i = 0; i < N; ++i) {
+  for (size_t i = 0; i < kNumElements; ++i) {
     this->map->Insert(std::to_string(i), static_cast<int>(i));
   }
 
   auto start = clock::now();
-  for (size_t i = 0; i < N; ++i) {
+  for (size_t i = 0; i < kNumElements; ++i) {
     this->map->Remove(std::to_string(i));
   }
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
 
-  // If removing N elements takes longer than 200 ms, consider it a failure.
+  // If removing kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
   EXPECT_LT(duration.count(), 200)
       << "Bulk remove too slow: " << duration.count() << " ms";
 }
@@ -188,7 +190,7 @@ TYPED_TEST(MapTest, BulkRemovePerformance) {
 // They will output the timings of different implementations for bulk
 // operations.
 TEST(MapBenchmark, CompareImplementations) {
-  constexpr size_t N = 50000;
+  constexpr size_t kBenchmarkSize = 50000;
   using clock = std::chrono::high_resolution_clock;
 
   std::map<std::string, std::function<std::unique_ptr<Map<std::string, int>>()>>
@@ -199,56 +201,59 @@ TEST(MapBenchmark, CompareImplementations) {
       &LinearProbingHashmapStringIntFactory::create;
   factories["StripedHashmap"] = &StripedHashmapFactory::create;
 
-  std::cout << std::endl
-            << "[==========] Running MapBenchmark for N = " << N
-            << " operations." << std::endl;
+  std::cout << "\n"
+            << "[==========] Running MapBenchmark for N = " << kBenchmarkSize
+            << " operations." << "\n";
 
   // --- Insert benchmark ---
-  std::cout << "[ BENCHMARK ] Bulk Insert" << std::endl;
+  std::cout << "[ BENCHMARK ] Bulk Insert" << "\n";
   for (auto const& [name, factory] : factories) {
     auto map = factory();
     const auto start = clock::now();
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
       map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);
     std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
-              << std::endl;
+              << "\n";
   }
 
   // --- Lookup benchmark ---
-  std::cout << "[ BENCHMARK ] Bulk Lookup" << std::endl;
+  std::cout << "[ BENCHMARK ] Bulk Lookup" << "\n";
   for (auto const& [name, factory] : factories) {
     auto map = factory();
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
       map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto start = clock::now();
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
       map->LookUp(std::to_string(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);
     std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
-              << std::endl;
+              << "\n";
   }
 
   // --- Remove benchmark ---
-  std::cout << "[ BENCHMARK ] Bulk Remove" << std::endl;
+  std::cout << "[ BENCHMARK ] Bulk Remove" << "\n";
   for (auto const& [name, factory] : factories) {
     auto map = factory();
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
       map->Insert(std::to_string(i), static_cast<int>(i));
     }
     const auto start = clock::now();
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
       map->Remove(std::to_string(i));
     }
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         clock::now() - start);
     std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
-              << std::endl;
+              << "\n";
   }
-  std::cout << "[==========] Finished MapBenchmark." << std::endl;
+  std::cout << "[==========] Finished MapBenchmark." << "\n";
 }
+
+// End suppression for magic-number warnings
+// NOLINTEND(readability-magic-numbers)

@@ -3,12 +3,10 @@
 
 #include <cassert>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <vector>
 
 #include "Map.h"
-#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {
@@ -86,19 +84,20 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
   }
 
-  std::unique_ptr<V> LookUp(const K &key) override {
+  std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
     const int value_bucket_index = InternalFind(key);
 
     if (value_bucket_index != -1) {
       assert(entries_[value_bucket_index].value.has_value());
-      return std::make_unique<V>(entries_[value_bucket_index].value.value());
+      return std::optional<std::reference_wrapper<const V>>(
+          std::cref(entries_[value_bucket_index].value.value()));
     }
 
-    return nullptr;
+    return std::nullopt;
   }
 
-  void Insert(const K &key, const V &value) override {
-    InsertWithoutSize(key, value);
+  void Insert(K key, V value) override {
+    InsertWithoutSize(std::move(key), std::move(value));
     size_++;
   }
 
@@ -110,7 +109,7 @@ class LinearProbingHashmap final : public Map<K, V> {
   }
 
  private:
-  void InsertWithoutSize(const K &key, const V &value) {
+  void InsertWithoutSize(K key, V value) {
     if (size_ > load_factor_ * entries_.size()) {
       Resize();
     }
@@ -123,8 +122,8 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
 
     entries_[bucket_index].state = element;
-    entries_[bucket_index].key = key;
-    entries_[bucket_index].value = value;
+    entries_[bucket_index].key = std::move(key);
+    entries_[bucket_index].value = std::move(value);
   }
 
   void Resize() {
@@ -138,7 +137,8 @@ class LinearProbingHashmap final : public Map<K, V> {
       if (entry.state != element) continue;
 
       assert(entry.key.has_value() && entry.value.has_value());
-      InsertWithoutSize(entry.key.value(), entry.value.value());
+      InsertWithoutSize(std::move(entry.key.value()),
+                        std::move(entry.value.value()));
     }
   }
 
