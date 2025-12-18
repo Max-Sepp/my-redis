@@ -2,12 +2,63 @@
 #define MY_REDIS_LINKEDLISTHASHMAP_H
 
 #include <functional>
+#include <memory>
 
 #include "store/Map.h"
-#include "store/StoreDefaults.h"
 
 template <typename K, typename V>
 class LinkedListHashmap final : public Map<K, V> {
+  struct Entry {
+    K key;
+    V value;
+    std::unique_ptr<Entry> next;
+    Entry(K key, V value) : key(std::move(key)), value(std::move(value)) {}
+  };
+
+  std::function<size_t(const K &)> hash_;
+  size_t size_ = 0;
+  std::vector<std::unique_ptr<Entry>> entries_;
+  double load_factor_;
+
+  void InsertWithoutResize(K key, V value) {
+    const size_t bucket_index = hash_(key) % entries_.size();
+    if (entries_[bucket_index] == nullptr) {
+      entries_[bucket_index] =
+          std::make_unique<Entry>(std::move(key), std::move(value));
+      size_++;
+      return;
+    }
+    Entry *curr_entry = entries_[bucket_index].get();
+    while (curr_entry->next != nullptr && curr_entry->key != key) {
+      curr_entry = curr_entry->next.get();
+    }
+    if (curr_entry->key == key) {
+      curr_entry->value = std::move(value);
+    } else {
+      assert(curr_entry->next == nullptr);
+      curr_entry->next =
+          std::make_unique<Entry>(std::move(key), std::move(value));
+      size_++;
+    }
+  }
+
+  void Resize() {
+    std::vector<std::pair<K, V>> flat_entries;
+    for (auto &bucket : entries_) {
+      Entry *curr = bucket.get();
+      while (curr) {
+        flat_entries.emplace_back(std::move(curr->key), std::move(curr->value));
+        curr = curr->next.get();
+      }
+    }
+    entries_.clear();
+    entries_.resize(std::max(static_cast<size_t>(2), size_ * 2));
+    size_ = 0;
+    for (auto &[key, value] : flat_entries) {
+      InsertWithoutResize(std::move(key), std::move(value));
+    }
+  }
+
  public:
   LinkedListHashmap(const LinkedListHashmap &other)
       : Map<K, V>(other),
@@ -49,38 +100,24 @@ class LinkedListHashmap final : public Map<K, V> {
     this->entries_.resize(DEFAULT_CAPACITY);
   }
 
-  LinkedListHashmap(const std::vector<std::pair<K, V>> &initialData,
-                    const double loadFactor,
-                    std::function<size_t(const K &)> hash) {
-    this->hash_ = hash;
-    this->load_factor_ = loadFactor;
-    size_t cap = std::max(
-        static_cast<size_t>(2),
-        std::max(initialData.size_() * 2,
-                 static_cast<size_t>(initialData.size_() / loadFactor)));
-    this->entries.resize(cap);
-    for (const auto &[key, value] : initialData) {
-      this->insert(key, value);
-    }
-  }
-
-  std::unique_ptr<V> LookUp(const K &key) override {
-    if (entries_.empty()) return nullptr;
+  std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
+    if (entries_.empty()) return std::nullopt;
     Entry *currEntry = entries_[hash_(key) % entries_.size()].get();
     while (currEntry != nullptr && currEntry->key != key) {
       currEntry = currEntry->next.get();
     }
     if (currEntry != nullptr) {
-      return std::make_unique<V>(currEntry->value);
+      return std::optional<std::reference_wrapper<const V>>(
+          std::cref(currEntry->value));
     }
-    return nullptr;
+    return std::nullopt;
   }
 
-  void Insert(const K &key, const V &value) override {
+  void Insert(K key, V value) override {
     if (entries_.empty() || size_ > entries_.size() * load_factor_) {
       Resize();
     }
-    InsertWithoutResize(key, value);
+    InsertWithoutResize(std::move(key), std::move(value));
   }
 
   void Remove(const K &key) override {
@@ -99,56 +136,6 @@ class LinkedListHashmap final : public Map<K, V> {
     if (currEntry->next != nullptr) {
       currEntry->next = std::move(currEntry->next->next);
       size_--;
-    }
-  }
-
- private:
-  struct Entry {
-    K key;
-    V value;
-    std::unique_ptr<Entry> next;
-    Entry(K key, V value) : key(std::move(key)), value(std::move(value)) {}
-  };
-
-  std::function<size_t(const K &)> hash_;
-  size_t size_ = 0;
-  std::vector<std::unique_ptr<Entry>> entries_;
-  double load_factor_;
-
-  void InsertWithoutResize(const K &key, const V &value) {
-    const size_t bucket_index = hash_(key) % entries_.size();
-    if (entries_[bucket_index] == nullptr) {
-      entries_[bucket_index] = std::make_unique<Entry>(key, value);
-      size_++;
-      return;
-    }
-    Entry *curr_entry = entries_[bucket_index].get();
-    while (curr_entry->next != nullptr && curr_entry->key != key) {
-      curr_entry = curr_entry->next.get();
-    }
-    if (curr_entry->key == key) {
-      curr_entry->value = value;
-    } else {
-      assert(curr_entry->next == nullptr);
-      curr_entry->next = std::make_unique<Entry>(key, value);
-      size_++;
-    }
-  }
-
-  void Resize() {
-    std::vector<std::pair<K, V>> flat_entries;
-    for (auto &bucket : entries_) {
-      Entry *curr = bucket.get();
-      while (curr) {
-        flat_entries.push_back({curr->key, curr->value});
-        curr = curr->next.get();
-      }
-    }
-    entries_.clear();
-    entries_.resize(std::max(static_cast<size_t>(2), size_ * 2));
-    size_ = 0;
-    for (const auto &[key, value] : flat_entries) {
-      InsertWithoutResize(key, value);
     }
   }
 };

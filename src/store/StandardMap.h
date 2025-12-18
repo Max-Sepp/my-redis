@@ -1,5 +1,7 @@
 #ifndef MY_REDIS_STANDARDMAP_H
 #define MY_REDIS_STANDARDMAP_H
+
+#include <functional>
 #include <unordered_map>
 
 #include "Map.h"
@@ -26,13 +28,16 @@ class StandardMap final : public Map<K, V> {
 
   StandardMap() = default;
 
-  std::unique_ptr<V> LookUp(const K& key) override {
-    const auto it = data_.find(key);
-    if (it == data_.end()) return nullptr;
-    return std::make_unique<V>(it->second);
+  std::optional<std::reference_wrapper<const V>> LookUp(const K& key) override {
+    const auto iter = data_.find(key);
+    if (iter == data_.end()) return std::nullopt;
+    return std::optional<std::reference_wrapper<const V>>(
+        std::cref(iter->second));
   }
 
-  void Insert(const K& key, const V& value) override { data_[key] = value; }
+  void Insert(K key, V value) override {
+    data_[std::move(key)] = std::move(value);
+  }
 
   void Remove(const K& key) override { data_.erase(key); }
 
