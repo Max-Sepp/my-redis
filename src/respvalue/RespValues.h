@@ -6,6 +6,6 @@ RespValue NullBulkString();
 RespValue BulkString(const std::optional<std::string>& string);
 RespValue Integer(long long num);
 RespValue Error(const std::string& message);
-RespValue Array(std::vector<RespValue> resp_values);
+RespValue Array(const std::vector<RespValue>& resp_values);
 
 #endif  // MY_REDIS_NULLBULKSTRING_H

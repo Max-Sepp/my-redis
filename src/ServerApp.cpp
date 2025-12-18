@@ -17,6 +17,7 @@
 #include "store/Hash.h"
 #include "store/Map.h"
 #include "store/StripedHashmap.h"
+#include "store/StripedSetFactory.h"
 
 constexpr int EXPECTED_NUMBER_OF_CONCURRENT_CONNECTIONS = 16;
 constexpr int PORT = 6379;
@@ -29,10 +30,11 @@ ServerApp::ServerApp() {
       std::make_shared<StripedHashmap<std::string, std::optional<std::string>>>(
           DEFAULT_LOAD_FACTOR, string_hash);
   const auto pub_sub_channels = std::make_shared<PubSubChannels>(
-      std::make_unique<StripedHashmap<std::string, std::unordered_set<int>>>(
-          DEFAULT_CAPACITY, string_hash),
+      std::make_unique<StripedHashmap<std::string, std::unique_ptr<Set<int>>>>(
+          DEFAULT_LOAD_FACTOR, string_hash),
+      std::make_unique<StripedSetFactory<int>>(),
       std::make_unique<StripedHashmap<int, std::unique_ptr<std::atomic_int>>>(
-          DEFAULT_CAPACITY, int_hash),
+          DEFAULT_LOAD_FACTOR, int_hash),
       logger_);
 
   std::vector<std::unique_ptr<Handler>> handlers;

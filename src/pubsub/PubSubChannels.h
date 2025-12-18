@@ -2,17 +2,21 @@
 #define MY_REDIS_PUBSUBCHANNELS_H
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <unordered_set>
 
 #include "logger/Logger.h"
 #include "respvalue/RespValue.h"
 #include "store/Map.h"
+#include "store/Set.h"
+#include "store/SetFactory.h"
 
 class PubSubChannels {
  public:
-  PubSubChannels(std::unique_ptr<Map<std::string, std::unordered_set<int>>>
+  PubSubChannels(std::unique_ptr<Map<std::string, std::unique_ptr<Set<int>>>>
                      channel_to_client_fds,
+                 std::unique_ptr<SetFactory<int>> set_factory,
                  std::unique_ptr<Map<int, std::unique_ptr<std::atomic_int>>>
                      client_fd_to_connection,
                  const std::shared_ptr<Logger>& logger);
@@ -22,9 +26,10 @@ class PubSubChannels {
                                 const std::string& channel) const;
 
  private:
-  // TODO: Concurrency problem around concurrent access to unordered_set
-  const std::unique_ptr<Map<std::string, std::unordered_set<int>>>
+  const std::unique_ptr<Map<std::string, std::unique_ptr<Set<int>>>>
       channel_to_client_fds_;
+  const std::unique_ptr<SetFactory<int>> set_factory_;
+
   const std::unique_ptr<Map<int, std::unique_ptr<std::atomic_int>>>
       client_fd_to_connection_;
 
