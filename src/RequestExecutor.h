@@ -30,19 +30,20 @@ class RequestExecutor {
     std::mutex queue_mutex_;
     RespValueQueue resp_value_queue_;
   };
-  StripedHashmap<int, std::unique_ptr<ClientConnection>>
-      client_fd_to_connection_ =
-          StripedHashmap<int, std::unique_ptr<ClientConnection>>(
-              DEFAULT_LOAD_FACTOR, int_hash);
+  std::unique_ptr<Map<int, std::unique_ptr<ClientConnection>>>
+      client_fd_to_connection_ = std::make_unique<
+          StripedHashmap<int, std::unique_ptr<ClientConnection>>>(
+          DEFAULT_LOAD_FACTOR, int_hash);
 
   static void AddRequestToRespQueue(
       const std::unique_ptr<ClientConnection>& connection,
       const std::string& request);
 
-  static void Worker(ConcurrentQueue<int>& client_fds_to_handle,
-                     const std::unique_ptr<HandlerDispatcher>& dispatcher,
-                     StripedHashmap<int, std::unique_ptr<ClientConnection>>&
-                         client_fd_to_connection);
+  static void Worker(
+      ConcurrentQueue<int>& client_fds_to_handle,
+      const std::unique_ptr<HandlerDispatcher>& dispatcher,
+      const std::unique_ptr<Map<int, std::unique_ptr<ClientConnection>>>&
+          client_fd_to_connection);
 
   static void HandleConnection(
       int client_fd, const std::unique_ptr<ClientConnection>& connection,
