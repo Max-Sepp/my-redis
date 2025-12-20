@@ -32,7 +32,7 @@ ServerApp::ServerApp() {
   const auto pub_sub_channels = std::make_shared<PubSubChannels>(
       std::make_unique<StripedHashmap<std::string, std::unique_ptr<Set<int>>>>(
           DEFAULT_LOAD_FACTOR, string_hash),
-      std::make_unique<StripedSetFactory<int>>(),
+      std::make_unique<StripedSetFactory<int>>(int_hash),
       std::make_unique<StripedHashmap<int, std::unique_ptr<std::atomic_int>>>(
           DEFAULT_LOAD_FACTOR, int_hash),
       logger_);

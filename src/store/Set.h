@@ -11,6 +11,8 @@ class Set {
   virtual void Insert(V element) = 0;
 
   virtual void Remove(const V& element) = 0;
+
+  virtual void ForEach(std::function<void(const V&)> action) = 0;
 };
 
 #endif  // MY_REDIS_SET_H

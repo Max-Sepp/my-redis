@@ -40,9 +40,10 @@ void PubSubChannels::Publish(const std::string& channel,
   if (channels_client_fds == std::nullopt) return;
 
   const std::string serialized_resp_value = resp_value.serialize();
-  for (const int client_fd : *channels_client_fds->get()) {
-    SendResponse(client_fd, serialized_resp_value, logger_);
-  }
+  channels_client_fds->get()->ForEach(
+      [serialized_resp_value, this](const int& client_fd) {
+        SendResponse(client_fd, serialized_resp_value, logger_);
+      });
 }
 
 int PubSubChannels::Unsubscribe(const int client_fd,

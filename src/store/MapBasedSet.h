@@ -11,7 +11,7 @@ class MapBasedSet final : public Set<V> {
  public:
   struct Empty {};
 
-  explicit MapBasedSet(std::unique_ptr<Map<V, Empty>>& map)
+  explicit MapBasedSet(std::unique_ptr<Map<V, Empty>> map)
       : map_(std::move(map)) {}
 
   bool Contains(const V& element) override {
@@ -21,6 +21,10 @@ class MapBasedSet final : public Set<V> {
   void Insert(V element) override { map_->Insert(element, Empty()); }
 
   void Remove(const V& element) override { map_->Remove(element); }
+
+  void ForEach(std::function<void(const V&)> action) override {
+    map_->ForEach([action](const V& value, const Empty&) { action(value); });
+  }
 
   std::unique_ptr<Map<V, Empty>> map_;
 };
