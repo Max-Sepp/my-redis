@@ -11,9 +11,9 @@
 
 template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {
-  enum State { empty, deleted, element };
+  enum State { EMPTY, DELETED, ELEMENT };
   struct Entry {
-    Entry() : state(empty), key(std::nullopt), value(std::nullopt) {};
+    Entry() : state(EMPTY), key(std::nullopt), value(std::nullopt) {};
     Entry(const State state, const std::optional<K> &key,
           const std::optional<V> &value)
         : state(state), key(key), value(value) {}
@@ -93,7 +93,16 @@ class LinearProbingHashmap final : public Map<K, V> {
   void Remove(const K &key) override {
     const int bucket_index = InternalFind(key);
     if (bucket_index != -1) {
-      entries_[bucket_index].state = deleted;
+      entries_[bucket_index].state = DELETED;
+    }
+  }
+
+  void ForEach(std::function<void(const K &, const V &)> action) override {
+    for (const Entry &entry : entries_) {
+      if (entry.state != ELEMENT) continue;
+
+      assert(entry.key.has_value() && entry.value.has_value());
+      action(entry.key.value(), entry.value.value());
     }
   }
 
@@ -104,13 +113,13 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
 
     size_t bucket_index = hash_(key) % entries_.size();
-    while (entries_[bucket_index].state == element &&
+    while (entries_[bucket_index].state == ELEMENT &&
            entries_[bucket_index].key.has_value() &&
            entries_[bucket_index].key.value() != key) {
       bucket_index = (bucket_index + 1) % entries_.size();
     }
 
-    entries_[bucket_index].state = element;
+    entries_[bucket_index].state = ELEMENT;
     entries_[bucket_index].key = std::move(key);
     entries_[bucket_index].value = std::move(value);
   }
@@ -122,7 +131,7 @@ class LinearProbingHashmap final : public Map<K, V> {
         std::max(static_cast<size_t>(2), old_entries.size() * 2));
 
     for (Entry &entry : old_entries) {
-      if (entry.state != element) continue;
+      if (entry.state != ELEMENT) continue;
 
       assert(entry.key.has_value() && entry.value.has_value());
       InsertWithoutSize(std::move(entry.key.value()),
@@ -135,8 +144,8 @@ class LinearProbingHashmap final : public Map<K, V> {
     size_t bucketIndex = hash_(key) % entries_.size();
     const size_t initial_bucket_index = bucketIndex;
 
-    while (entries_[bucketIndex].state == deleted ||
-           (entries_[bucketIndex].state == element &&
+    while (entries_[bucketIndex].state == DELETED ||
+           (entries_[bucketIndex].state == ELEMENT &&
             entries_[bucketIndex].key.has_value() &&
             entries_[bucketIndex].key.value() != key)) {
       bucketIndex = (bucketIndex + 1) % entries_.size();
@@ -146,7 +155,7 @@ class LinearProbingHashmap final : public Map<K, V> {
       }
     }
 
-    if (entries_[bucketIndex].state == element) {
+    if (entries_[bucketIndex].state == ELEMENT) {
       return static_cast<int>(bucketIndex);
     }
     return -1;

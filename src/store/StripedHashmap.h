@@ -126,6 +126,22 @@ class StripedHashmap final : public Map<K, V> {
       size_--;
     }
   }
+
+  void ForEach(std::function<void(const K &, const V &)> action) override {
+    // Acquire all locks
+    std::vector<std::unique_lock<std::recursive_mutex>> locks;
+    locks.reserve(locks_.size());
+    for (std::recursive_mutex &lock : locks_) locks.emplace_back(lock);
+
+    // Perform action on all entries
+    for (const auto &bucket : entries_) {
+      Entry *curr = bucket.get();
+      while (curr) {
+        action(curr->key, curr->value);
+        curr = curr->next.get();
+      }
+    }
+  }
 };
 
 #endif  // MY_REDIS_STRIPEDHASHMAP_H

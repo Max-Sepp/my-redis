@@ -41,6 +41,12 @@ class StandardMap final : public Map<K, V> {
 
   void Remove(const K& key) override { data_.erase(key); }
 
+  void ForEach(std::function<void(const K&, const V&)> action) override {
+    for (const auto& [key, value] : data_) {
+      action(key, value);
+    }
+  }
+
  private:
   std::unordered_map<K, V> data_;
 };

@@ -138,6 +138,16 @@ class LinkedListHashmap final : public Map<K, V> {
       size_--;
     }
   }
+
+  void ForEach(std::function<void(const K &, const V &)> action) override {
+    for (const auto &bucket : entries_) {
+      Entry *curr = bucket.get();
+      while (curr) {
+        action(curr->key, curr->value);
+        curr = curr->next.get();
+      }
+    }
+  }
 };
 
 #endif  // MY_REDIS_LINKEDLISTHASHMAP_H
