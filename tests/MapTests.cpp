@@ -329,3 +329,35 @@ TYPED_TEST(MapTestUniquePtr, RemoveAndLookUp) {
   this->map->Remove(std::string("one"));
   EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
 }
+
+TYPED_TEST(MapTest, ForEachCollectsAllItems) {
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+  this->map->Insert(std::string("three"), 3);
+
+  std::map<std::string, int> gathered;
+  this->map->ForEach(
+      [&](const std::string& key, const int& value) { gathered[key] = value; });
+
+  EXPECT_EQ(gathered.size(), 3);
+  EXPECT_EQ(gathered["one"], 1);
+  EXPECT_EQ(gathered["two"], 2);
+  EXPECT_EQ(gathered["three"], 3);
+}
+
+TYPED_TEST(MapTestUniquePtr, ForEachUniquePtrCollectsAllItems) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("a"));
+  this->map->Insert(std::string("two"), std::make_unique<std::string>("b"));
+  this->map->Insert(std::string("three"), std::make_unique<std::string>("c"));
+
+  std::map<std::string, std::string> gathered;
+  this->map->ForEach(
+      [&](const std::string& key, const std::unique_ptr<std::string>& value) {
+        if (value) gathered[key] = *value;
+      });
+
+  EXPECT_EQ(gathered.size(), 3);
+  EXPECT_EQ(gathered["one"], "a");
+  EXPECT_EQ(gathered["two"], "b");
+  EXPECT_EQ(gathered["three"], "c");
+}

@@ -97,6 +97,15 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
   }
 
+  void ForEach(std::function<void(const K &, const V &)> action) override {
+    for (const Entry &entry : entries_) {
+      if (entry.state != element) continue;
+
+      assert(entry.key.has_value() && entry.value.has_value());
+      action(entry.key.value(), entry.value.value());
+    }
+  }
+
  private:
   void InsertWithoutSize(K key, V value) {
     if (size_ > load_factor_ * entries_.size()) {
