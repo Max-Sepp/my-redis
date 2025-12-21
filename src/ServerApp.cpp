@@ -10,12 +10,16 @@
 
 #include "handler/DelRequestHandler.h"
 #include "handler/GetRequestHandler.h"
+#include "handler/PublishRequestHandler.h"
 #include "handler/SetRequestHandler.h"
+#include "handler/SubscribeRequestHandler.h"
 #include "handler/UnknownRequestHandler.h"
+#include "handler/UnsubscribeRequestHandler.h"
 #include "logger/FileLogger.h"
 #include "store/Hash.h"
 #include "store/Map.h"
 #include "store/StripedHashmap.h"
+#include "store/StripedSetFactory.h"
 
 constexpr int EXPECTED_NUMBER_OF_CONCURRENT_CONNECTIONS = 16;
 constexpr int PORT = 6379;
@@ -27,12 +31,25 @@ ServerApp::ServerApp() {
   const auto store =
       std::make_shared<StripedHashmap<std::string, std::optional<std::string>>>(
           DEFAULT_LOAD_FACTOR, string_hash);
+  const auto pub_sub_channels = std::make_shared<PubSubChannels>(
+      std::make_unique<StripedHashmap<std::string, std::unique_ptr<Set<int>>>>(
+          DEFAULT_LOAD_FACTOR, string_hash),
+      std::make_unique<StripedSetFactory<int>>(int_hash),
+      std::make_unique<StripedHashmap<int, std::unique_ptr<std::atomic_int>>>(
+          DEFAULT_LOAD_FACTOR, int_hash),
+      logger_);
 
   std::vector<std::unique_ptr<Handler>> handlers;
-  handlers.push_back(GetRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(SetRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(DelRequestHandler::CreateHandler(store, logger_));
-  handlers.push_back(UnknownRequestHandler::CreateHandler(store, logger_));
+  handlers.push_back(std::make_unique<GetRequestHandler>(store, logger_));
+  handlers.push_back(std::make_unique<SetRequestHandler>(store, logger_));
+  handlers.push_back(std::make_unique<DelRequestHandler>(store, logger_));
+  handlers.push_back(
+      std::make_unique<SubscribeRequestHandler>(pub_sub_channels, logger_));
+  handlers.push_back(
+      std::make_unique<PublishRequestHandler>(pub_sub_channels, logger_));
+  handlers.push_back(
+      std::make_unique<UnsubscribeRequestHandler>(pub_sub_channels, logger_));
+  handlers.push_back(std::make_unique<UnknownRequestHandler>(store, logger_));
 
   request_executor_ = std::make_unique<RequestExecutor>(
       std::make_unique<HandlerDispatcher>(std::move(handlers), logger_));

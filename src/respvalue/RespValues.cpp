@@ -11,3 +11,7 @@ RespValue Integer(long long num) { return RespValue::FromVariant(num); }
 RespValue Error(const std::string& message) {
   return RespValue::FromVariant(RespValue::RespSimpleError{message});
 }
+
+RespValue Array(const std::vector<RespValue>& resp_values) {
+  return RespValue::FromVariant(resp_values);
+}

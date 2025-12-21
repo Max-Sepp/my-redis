@@ -29,12 +29,6 @@ void GetRequestHandler::Handle(const int client_fd,
   }
 }
 
-std::unique_ptr<Handler> GetRequestHandler::CreateHandler(
-    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
-    const std::shared_ptr<Logger>& logger) {
-  return std::make_unique<GetRequestHandler>(data, logger);
-}
-
 GetRequestHandler::GetRequestHandler(
     const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
     const std::shared_ptr<Logger>& logger)

@@ -19,12 +19,6 @@ void SetRequestHandler::Handle(const int client_fd,
   SendResponse(client_fd, OK_RESP, logger_);
 }
 
-std::unique_ptr<Handler> SetRequestHandler::CreateHandler(
-    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
-    const std::shared_ptr<Logger>& logger) {
-  return std::make_unique<SetRequestHandler>(data, logger);
-}
-
 SetRequestHandler::SetRequestHandler(
     const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
     const std::shared_ptr<Logger>& logger)

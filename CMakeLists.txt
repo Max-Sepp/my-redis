@@ -21,6 +21,10 @@ set(REQUEST_SOURCES
         src/requests/SetRequest.cpp
         src/requests/DelRequest.cpp
         src/requests/OneArgRequest.cpp
+        src/requests/PublishRequest.cpp
+        src/requests/SubscribeRequest.cpp
+        src/requests/UnsubscribeRequest.cpp
+        src/requests/VarArgRequest.cpp
 )
 
 set(STORE_SOURCES
@@ -31,18 +35,26 @@ set(LOGGING_SOURCES
         src/logger/FileLogger.cpp
 )
 
+set(PUBSUB_SOURCES
+        src/pubsub/PubSubChannels.cpp
+        src/pubsub/PubSubResponse.cpp
+)
+
 set(HANDLER_SOURCES
         src/handler/GetRequestHandler.cpp
         src/handler/HandlerDispatcher.cpp
-        src/handler/HandlerHelpers.cpp
         src/handler/SetRequestHandler.cpp
         src/handler/DelRequestHandler.cpp
+        src/handler/SubscribeRequestHandler.cpp
+        src/handler/PublishRequestHandler.cpp
+        src/handler/UnsubscribeRequestHandler.cpp
         src/handler/UnknownRequestHandler.cpp
 )
 
 set(TOP_SOURCES
         src/ServerApp.cpp
         src/RequestExecutor.cpp
+        src/HandlerHelpers.cpp
 )
 
 # Consolidated application sources
@@ -51,6 +63,7 @@ set(APP_SOURCES
         ${REQUEST_SOURCES}
         ${STORE_SOURCES}
         ${LOGGING_SOURCES}
+        ${PUBSUB_SOURCES}
         ${HANDLER_SOURCES}
         ${TOP_SOURCES}
 )
