@@ -25,7 +25,7 @@ VarArgRequest::VarArgRequest(const RespValue& resp_value,
                                 " request resp must be an array containing " +
                                 request_type + " and then the arguments");
 
-  for (int i = 1; i < request_array.size(); i++) {
+  for (size_t i = 1; i < request_array.size(); i++) {
     const RespValue& value = request_array[i];
 
     if (!std::holds_alternative<RespValue::RespBulkString>(value.getValue()))
@@ -35,7 +35,7 @@ VarArgRequest::VarArgRequest(const RespValue& resp_value,
         std::get<RespValue::RespBulkString>(value.getValue());
 
     if (!value_string.has_value() || value_string->empty())
-      throw std::invalid_argument("Key is not a valid key");
+      throw std::invalid_argument("Empty argument not allowed");
 
     args_.push_back(value_string.value());
   }

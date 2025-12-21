@@ -34,6 +34,7 @@ int PubSubChannels::Subscribe(const int client_fd,
   }
   return ++(*current_connections->get());
 }
+
 int PubSubChannels::Publish(
     const std::string& channel,  // NOLINT(*-easily-swappable-parameters)
     const std::string& message) const {
