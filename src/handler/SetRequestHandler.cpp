@@ -20,6 +20,6 @@ void SetRequestHandler::Handle(const int client_fd,
 }
 
 SetRequestHandler::SetRequestHandler(
-    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data_,
-    const std::shared_ptr<Logger>& logger_)
-    : data_(data_), logger_(logger_) {}
+    const std::shared_ptr<Map<std::string, std::optional<std::string>>>& data,
+    const std::shared_ptr<Logger>& logger)
+    : data_(data), logger_(logger) {}

@@ -10,7 +10,8 @@ PublishRequest::PublishRequest(const RespValue& resp_value) {
       std::get<RespValue::RespArray>(resp_value.getValue());
 
   if (request_array.size() != 3)
-    throw std::invalid_argument("Publish must be two arguments");
+    throw std::invalid_argument(
+        "Publish must have exactly three elements: PUBLISH, channel, and message");
 
   const RespValue& publish = request_array[0];
   const RespValue& channel = request_array[1];
@@ -51,12 +52,12 @@ bool PublishRequest::IsRequest(const RespValue& resp_value) {
 
   if (request_array.size() != 3) return false;
 
-  const RespValue& set = request_array[0];
+  const RespValue& publish = request_array[0];
   const RespValue& channel = request_array[1];
   const RespValue& message = request_array[2];
 
-  if (!(std::holds_alternative<RespValue::RespBulkString>(set.getValue()) &&
-        std::get<RespValue::RespBulkString>(set.getValue()) == "PUBLISH"))
+  if (!(std::holds_alternative<RespValue::RespBulkString>(publish.getValue()) &&
+        std::get<RespValue::RespBulkString>(publish.getValue()) == "PUBLISH"))
     return false;
 
   if (!(std::holds_alternative<RespValue::RespBulkString>(channel.getValue()) &&

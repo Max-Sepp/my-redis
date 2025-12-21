@@ -44,7 +44,7 @@ int PubSubChannels::Publish(
   int number_clients_published_too = 0;
   const std::string serialized_resp_value = BulkString(message).serialize();
   channels_client_fds->get()->ForEach([&number_clients_published_too,
-                                       serialized_resp_value,
+                                       &serialized_resp_value,
                                        this](const int& client_fd) {
     number_clients_published_too++;
     SendResponse(client_fd, serialized_resp_value, logger_);
