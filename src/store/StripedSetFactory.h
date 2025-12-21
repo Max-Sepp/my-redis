@@ -20,7 +20,7 @@ class StripedSetFactory final : public SetFactory<V> {
                 DEFAULT_LOAD_FACTOR, hash_);
 
     return std::make_unique<MapBasedSet<V>>(std::move(striped_map));
-  };
+  }
 };
 
 #endif  // MY_REDIS_STRIPEDSETFACTORY_H
