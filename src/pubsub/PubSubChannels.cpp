@@ -1,6 +1,7 @@
 #include "PubSubChannels.h"
 
 #include "HandlerHelpers.h"
+#include "PubSubResponse.h"
 #include "respvalue/RespValues.h"
 
 PubSubChannels::PubSubChannels(
@@ -43,12 +44,14 @@ int PubSubChannels::Publish(
   if (channels_client_fds == std::nullopt) return 0;
 
   int number_clients_published_to = 0;
-  const std::string serialized_resp_value = BulkString(message).serialize();
+  const RespValue resp_message = BulkString(message);
   channels_client_fds->get()->ForEach([&number_clients_published_to,
-                                       serialized_resp_value,
-                                       this](const int& client_fd) {
+                                       resp_message, this,
+                                       channel](const int& client_fd) {
     number_clients_published_to++;
-    SendResponse(client_fd, serialized_resp_value, logger_);
+    SendResponse(client_fd,
+                 PubSubResponse("message", channel, resp_message).serialize(),
+                 logger_);
   });
   return number_clients_published_to;
 }

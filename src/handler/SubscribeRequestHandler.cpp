@@ -3,6 +3,7 @@
 #include "HandlerHelpers.h"
 #include "pubsub/PubSubResponse.h"
 #include "requests/SubscribeRequest.h"
+#include "respvalue/RespValues.h"
 
 SubscribeRequestHandler::SubscribeRequestHandler(
     std::shared_ptr<PubSubChannels> pub_sub_channels,
@@ -20,8 +21,9 @@ void SubscribeRequestHandler::Handle(const int client_fd,
   for (int i = 0; i < request.numChannels(); i++) {
     const std::string& channel = request.getChannel(i);
     const int num_channels = pub_sub_channels_->Subscribe(client_fd, channel);
-    SendResponse(client_fd,
-                 PubSubResponse("subscribe", channel, num_channels).serialize(),
-                 logger_);
+    SendResponse(
+        client_fd,
+        PubSubResponse("subscribe", channel, Integer(num_channels)).serialize(),
+        logger_);
   }
 }
