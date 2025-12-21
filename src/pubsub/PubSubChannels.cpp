@@ -42,15 +42,15 @@ int PubSubChannels::Publish(
 
   if (channels_client_fds == std::nullopt) return 0;
 
-  int number_clients_published_too = 0;
+  int number_clients_published_to = 0;
   const std::string serialized_resp_value = BulkString(message).serialize();
-  channels_client_fds->get()->ForEach([&number_clients_published_too,
-                                       &serialized_resp_value,
+  channels_client_fds->get()->ForEach([&number_clients_published_to,
+                                       serialized_resp_value,
                                        this](const int& client_fd) {
-    number_clients_published_too++;
+    number_clients_published_to++;
     SendResponse(client_fd, serialized_resp_value, logger_);
   });
-  return number_clients_published_too;
+  return number_clients_published_to;
 }
 
 int PubSubChannels::Unsubscribe(const int client_fd,
