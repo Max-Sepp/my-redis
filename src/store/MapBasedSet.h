@@ -26,6 +26,7 @@ class MapBasedSet final : public Set<V> {
     map_->ForEach([action](const V& value, const Empty&) { action(value); });
   }
 
+ private:
   std::unique_ptr<Map<V, Empty>> map_;
 };
 
