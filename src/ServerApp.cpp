@@ -10,9 +10,11 @@
 
 #include "handler/DelRequestHandler.h"
 #include "handler/GetRequestHandler.h"
+#include "handler/PublishRequestHandler.h"
 #include "handler/SetRequestHandler.h"
 #include "handler/SubscribeRequestHandler.h"
 #include "handler/UnknownRequestHandler.h"
+#include "handler/UnsubscribeRequestHandler.h"
 #include "logger/FileLogger.h"
 #include "store/Hash.h"
 #include "store/Map.h"
@@ -43,6 +45,10 @@ ServerApp::ServerApp() {
   handlers.push_back(std::make_unique<DelRequestHandler>(store, logger_));
   handlers.push_back(
       std::make_unique<SubscribeRequestHandler>(pub_sub_channels, logger_));
+  handlers.push_back(
+      std::make_unique<PublishRequestHandler>(pub_sub_channels, logger_));
+  handlers.push_back(
+      std::make_unique<UnsubscribeRequestHandler>(pub_sub_channels, logger_));
   handlers.push_back(std::make_unique<UnknownRequestHandler>(store, logger_));
 
   request_executor_ = std::make_unique<RequestExecutor>(

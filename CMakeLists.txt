@@ -21,7 +21,9 @@ set(REQUEST_SOURCES
         src/requests/SetRequest.cpp
         src/requests/DelRequest.cpp
         src/requests/OneArgRequest.cpp
+        src/requests/PublishRequest.cpp
         src/requests/SubscribeRequest.cpp
+        src/requests/UnsubscribeRequest.cpp
         src/requests/VarArgRequest.cpp
 )
 
@@ -44,6 +46,8 @@ set(HANDLER_SOURCES
         src/handler/SetRequestHandler.cpp
         src/handler/DelRequestHandler.cpp
         src/handler/SubscribeRequestHandler.cpp
+        src/handler/PublishRequestHandler.cpp
+        src/handler/UnsubscribeRequestHandler.cpp
         src/handler/UnknownRequestHandler.cpp
 )
 

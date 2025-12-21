@@ -1,6 +1,7 @@
 #include "PubSubChannels.h"
 
 #include "HandlerHelpers.h"
+#include "respvalue/RespValues.h"
 
 PubSubChannels::PubSubChannels(
     std::unique_ptr<Map<std::string, std::unique_ptr<Set<int>>>>
@@ -33,17 +34,22 @@ int PubSubChannels::Subscribe(const int client_fd,
   }
   return ++(*current_connections->get());
 }
-void PubSubChannels::Publish(const std::string& channel,
-                             const RespValue& resp_value) const {
+int PubSubChannels::Publish(
+    const std::string& channel,  // NOLINT(*-easily-swappable-parameters)
+    const std::string& message) const {
   const auto channels_client_fds = channel_to_client_fds_->LookUp(channel);
 
-  if (channels_client_fds == std::nullopt) return;
+  if (channels_client_fds == std::nullopt) return 0;
 
-  const std::string serialized_resp_value = resp_value.serialize();
-  channels_client_fds->get()->ForEach(
-      [serialized_resp_value, this](const int& client_fd) {
-        SendResponse(client_fd, serialized_resp_value, logger_);
-      });
+  int number_clients_published_too = 0;
+  const std::string serialized_resp_value = BulkString(message).serialize();
+  channels_client_fds->get()->ForEach([&number_clients_published_too,
+                                       serialized_resp_value,
+                                       this](const int& client_fd) {
+    number_clients_published_too++;
+    SendResponse(client_fd, serialized_resp_value, logger_);
+  });
+  return number_clients_published_too;
 }
 
 int PubSubChannels::Unsubscribe(const int client_fd,

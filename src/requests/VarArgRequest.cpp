@@ -13,7 +13,7 @@ VarArgRequest::VarArgRequest(const RespValue& resp_value,
   const auto& request_array =
       std::get<RespValue::RespArray>(resp_value.getValue());
 
-  if (request_array.size() >= 1)
+  if (request_array.size() <= 1)
     throw std::invalid_argument(request_type +
                                 " request resp must be an array containing " +
                                 request_type + " and then the arguments");
@@ -44,7 +44,7 @@ VarArgRequest::VarArgRequest(const RespValue& resp_value,
 VarArgRequest::VarArgRequest(std::string request_type)
     : request_type_(std::move(request_type)) {}
 
-int VarArgRequest::numArgs() const { return args_.size(); }
+int VarArgRequest::numArgs() const { return static_cast<int>(args_.size()); }
 
 const std::string& VarArgRequest::getArg(const int index) const {
   if (index < 0 || numArgs() <= index)
@@ -59,7 +59,7 @@ bool VarArgRequest::IsRequest(const RespValue& resp_value) const {
   const auto& request_array =
       std::get<RespValue::RespArray>(resp_value.getValue());
 
-  if (request_array.size() >= 1) return false;
+  if (request_array.size() <= 1) return false;
 
   if (const RespValue& get = request_array[0];
       !(std::holds_alternative<RespValue::RespBulkString>(get.getValue()) &&

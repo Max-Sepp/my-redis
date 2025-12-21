@@ -4,10 +4,8 @@
 #include <atomic>
 #include <memory>
 #include <string>
-#include <unordered_set>
 
 #include "logger/Logger.h"
-#include "respvalue/RespValue.h"
 #include "store/Map.h"
 #include "store/Set.h"
 #include "store/SetFactory.h"
@@ -21,7 +19,8 @@ class PubSubChannels {
                      client_fd_to_connection,
                  const std::shared_ptr<Logger>& logger);
   [[nodiscard]] int Subscribe(int client_fd, const std::string& channel) const;
-  void Publish(const std::string& channel, const RespValue& resp_value) const;
+  [[nodiscard]] int Publish(const std::string& channel,
+                            const std::string& message) const;
   [[nodiscard]] int Unsubscribe(int client_fd,
                                 const std::string& channel) const;
 
