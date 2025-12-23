@@ -23,11 +23,14 @@ class RequestExecutor {
 
   std::unique_ptr<HandlerDispatcher> dispatcher_;
 
-  ConcurrentQueue<int> client_fds_to_handle_ = ConcurrentQueue<int>();
+  ConcurrentQueue<std::pair<int, std::string>> jobs_ =
+      ConcurrentQueue<std::pair<int, std::string>>();
 
   struct ClientConnection {
-    // Mutex for mutual exclusion over resp_value_queue_
-    std::mutex queue_mutex_;
+    // Mutex for mutual exclusion over checking being_processed and
+    // resp_value_queue.
+    std::mutex mutex_;
+    bool being_processed{false};
     RespValueQueue resp_value_queue_;
   };
   std::unique_ptr<Map<int, std::unique_ptr<ClientConnection>>>
@@ -35,19 +38,16 @@ class RequestExecutor {
           StripedHashmap<int, std::unique_ptr<ClientConnection>>>(
           DEFAULT_LOAD_FACTOR, int_hash);
 
-  static void AddRequestToRespQueue(
-      const std::unique_ptr<ClientConnection>& connection,
-      const std::string& request);
-
   static void Worker(
-      ConcurrentQueue<int>& client_fds_to_handle,
+      ConcurrentQueue<std::pair<int, std::string>>& jobs,
       const std::unique_ptr<HandlerDispatcher>& dispatcher,
       const std::unique_ptr<Map<int, std::unique_ptr<ClientConnection>>>&
           client_fd_to_connection);
 
   static void HandleConnection(
-      int client_fd, const std::unique_ptr<ClientConnection>& connection,
-      const std::unique_ptr<HandlerDispatcher>& dispatcher);
+      const std::unique_ptr<HandlerDispatcher>& dispatcher, int client_fd,
+      const std::unique_ptr<ClientConnection>& connection,
+      const std::string& request);
 };
 
 #endif  // MY_REDIS_REQUESTEXECUTOR_H
