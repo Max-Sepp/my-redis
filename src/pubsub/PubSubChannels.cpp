@@ -8,8 +8,7 @@ PubSubChannels::PubSubChannels(
     std::unique_ptr<Map<std::string, std::unique_ptr<Set<int>>>>
         channel_to_client_fds,
     std::unique_ptr<SetFactory<int>> set_factory,
-    std::unique_ptr<Map<int, std::unique_ptr<std::atomic_int>>>
-        client_fd_to_connection,
+    std::unique_ptr<Map<int, std::unique_ptr<int>>> client_fd_to_connection,
     const std::shared_ptr<Logger>& logger)
     : channel_to_client_fds_(std::move(channel_to_client_fds)),
       set_factory_(std::move(set_factory)),
@@ -29,10 +28,10 @@ int PubSubChannels::Subscribe(const int client_fd,
   const auto current_connections = client_fd_to_connection_->LookUp(client_fd);
 
   if (current_connections == std::nullopt) {
-    client_fd_to_connection_->Insert(client_fd,
-                                     std::make_unique<std::atomic_int>(1));
+    client_fd_to_connection_->Insert(client_fd, std::make_unique<int>(1));
     return 1;
   }
+
   return ++(*current_connections->get());
 }
 
@@ -63,8 +62,7 @@ int PubSubChannels::Unsubscribe(const int client_fd,
 
   const auto channels_client_fds = channel_to_client_fds_->LookUp(channel);
 
-  if (channels_client_fds == std::nullopt)
-    return current_connections->get()->load();
+  if (channels_client_fds == std::nullopt) return *current_connections->get();
 
   channels_client_fds->get()->Remove(client_fd);
   return --(*current_connections->get());
