@@ -1,6 +1,6 @@
 #include "UnknownRequestHandler.h"
 
-#include "../HandlerHelpers.h"
+#include "HandlerHelpers.h"
 #include "logger/Logger.h"
 #include "respvalue/RespValues.h"
 
