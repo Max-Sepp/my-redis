@@ -1,6 +1,6 @@
 #include "PubSubChannels.h"
 
-#include "HandlerHelpers.h"
+#include "../HandlerHelpers.h"
 #include "PubSubResponse.h"
 #include "respvalue/RespValues.h"
 

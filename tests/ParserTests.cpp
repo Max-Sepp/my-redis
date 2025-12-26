@@ -135,7 +135,8 @@ TEST_F(RespParsingTest, ParseBulkStringNull) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringWithNewlines) {
-  const RespValue resp = RespValue::FromString("$12\r\nhello\r\nworld\r\n").first;
+  const RespValue resp =
+      RespValue::FromString("$12\r\nhello\r\nworld\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -175,7 +176,8 @@ TEST_F(RespParsingTest, ParseArrayTwoStrings) {
 }
 
 TEST_F(RespParsingTest, ParseArrayMixedTypes) {
-  const RespValue resp = RespValue::FromString("*3\r\n:1\r\n:2\r\n:3\r\n").first;
+  const RespValue resp =
+      RespValue::FromString("*3\r\n:1\r\n:2\r\n:3\r\n").first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -215,9 +217,10 @@ TEST_F(RespParsingTest, ParseArrayWithNullElements) {
 }
 
 TEST_F(RespParsingTest, ParseNestedArray) {
-  const RespValue resp = RespValue::FromString(
-                             "*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n")
-                             .first;
+  const RespValue resp =
+      RespValue::FromString(
+          "*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n")
+          .first;
   const auto& value = resp.getValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -315,7 +318,8 @@ TEST(RespSerializeTests, ArrayEmpty) {
 TEST(RespSerializeTests, ArrayWithElements) {
   RespValue::RespArray arr;
   arr.emplace_back(RespValue::FromString("+foo\r\n").first);
-  arr.emplace_back(RespValue::FromVariant(static_cast<RespValue::RespInteger>(123)));
+  arr.emplace_back(
+      RespValue::FromVariant(static_cast<RespValue::RespInteger>(123)));
   arr.emplace_back(RespValue::FromVariant(
       RespValue::RespBulkString(std::make_optional<std::string>("bar"))));
   const RespValue value = RespValue::FromVariant(arr);
