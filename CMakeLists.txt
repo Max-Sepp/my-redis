@@ -10,51 +10,52 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
+# Server files
 set(RESPVALUE_SOURCES
-        src/respvalue/RespValue.cpp
-        src/respvalue/RespValueQueue.cpp
-        src/respvalue/RespValues.cpp
+        src/server/respvalue/RespValue.cpp
+        src/server/respvalue/RespValueQueue.cpp
+        src/server/respvalue/RespValues.cpp
 )
 
 set(REQUEST_SOURCES
-        src/requests/GetRequest.cpp
-        src/requests/SetRequest.cpp
-        src/requests/DelRequest.cpp
-        src/requests/OneArgRequest.cpp
-        src/requests/PublishRequest.cpp
-        src/requests/SubscribeRequest.cpp
-        src/requests/UnsubscribeRequest.cpp
-        src/requests/VarArgRequest.cpp
+        src/server/requests/GetRequest.cpp
+        src/server/requests/SetRequest.cpp
+        src/server/requests/DelRequest.cpp
+        src/server/requests/OneArgRequest.cpp
+        src/server/requests/PublishRequest.cpp
+        src/server/requests/SubscribeRequest.cpp
+        src/server/requests/UnsubscribeRequest.cpp
+        src/server/requests/VarArgRequest.cpp
 )
 
 set(STORE_SOURCES
-        src/store/Hash.cpp
+        src/server/store/Hash.cpp
 )
 
 set(LOGGING_SOURCES
-        src/logger/FileLogger.cpp
+        src/server/logger/FileLogger.cpp
 )
 
 set(PUBSUB_SOURCES
-        src/pubsub/PubSubChannels.cpp
-        src/pubsub/PubSubResponse.cpp
+        src/server/pubsub/PubSubChannels.cpp
+        src/server/pubsub/PubSubResponse.cpp
 )
 
 set(HANDLER_SOURCES
-        src/handler/GetRequestHandler.cpp
-        src/handler/HandlerDispatcher.cpp
-        src/handler/SetRequestHandler.cpp
-        src/handler/DelRequestHandler.cpp
-        src/handler/SubscribeRequestHandler.cpp
-        src/handler/PublishRequestHandler.cpp
-        src/handler/UnsubscribeRequestHandler.cpp
-        src/handler/UnknownRequestHandler.cpp
+        src/server/handler/GetRequestHandler.cpp
+        src/server/handler/HandlerDispatcher.cpp
+        src/server/handler/SetRequestHandler.cpp
+        src/server/handler/DelRequestHandler.cpp
+        src/server/handler/SubscribeRequestHandler.cpp
+        src/server/handler/PublishRequestHandler.cpp
+        src/server/handler/UnsubscribeRequestHandler.cpp
+        src/server/handler/UnknownRequestHandler.cpp
 )
 
 set(TOP_SOURCES
-        src/ServerApp.cpp
-        src/RequestExecutor.cpp
-        src/HandlerHelpers.cpp
+        src/server/ServerApp.cpp
+        src/server/RequestExecutor.cpp
+        src/server/HandlerHelpers.cpp
 )
 
 # Consolidated application sources
@@ -68,9 +69,13 @@ set(APP_SOURCES
         ${TOP_SOURCES}
 )
 
-# Main executable
-add_executable(my_redis_server src/main.cpp ${APP_SOURCES})
-target_include_directories(my_redis_server PRIVATE src)
+# Server executable
+add_executable(my_redis_server src/server/main.cpp ${APP_SOURCES})
+target_include_directories(my_redis_server PRIVATE src/server)
+
+# Client executable
+add_executable(my_redis_client src/client/main.cpp)
+target_include_directories(my_redis_client PRIVATE src/client)
 
 # --- Testing ---
 # Only include tests if the TESTS option is ON (default: OFF)
@@ -100,7 +105,7 @@ if (BUILD_TESTS)
     # Add the test executable with its own sources plus the library sources
     add_executable(parser_tests
             tests/ParserTests.cpp
-            src/respvalue/RespValue.cpp
+            src/server/respvalue/RespValue.cpp
     )
     add_executable(map_tests
             tests/MapTests.cpp
@@ -112,8 +117,8 @@ if (BUILD_TESTS)
     target_link_libraries(map_tests PRIVATE GTest::gtest_main)
 
     # Include directories for the test executable
-    target_include_directories(parser_tests PRIVATE src)
-    target_include_directories(map_tests PRIVATE src)
+    target_include_directories(parser_tests PRIVATE src/server)
+    target_include_directories(map_tests PRIVATE src/server)
 
     include(GoogleTest)
     gtest_discover_tests(parser_tests)
