@@ -2,6 +2,7 @@
 
 #include <sys/socket.h>
 
+#include <array>
 #include <iostream>
 #include <string>
 
