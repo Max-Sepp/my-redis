@@ -10,11 +10,10 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
-# Server files
 set(RESPVALUE_SOURCES
-        src/server/respvalue/RespValue.cpp
-        src/server/respvalue/RespValueQueue.cpp
-        src/server/respvalue/RespValues.cpp
+        src/respvalue/RespValue.cpp
+        src/respvalue/RespValueQueue.cpp
+        src/respvalue/RespValues.cpp
 )
 
 set(REQUEST_SOURCES
@@ -52,30 +51,49 @@ set(HANDLER_SOURCES
         src/server/handler/UnknownRequestHandler.cpp
 )
 
-set(TOP_SOURCES
+set(NETWORK_SOURCES
+        src/network/SendAll.cpp
+)
+
+set(TOP_SERVER_SOURCES
         src/server/ServerApp.cpp
         src/server/RequestExecutor.cpp
         src/server/HandlerHelpers.cpp
 )
 
+set(TOP_CLIENT_SOURCES
+        src/client/Connect.cpp
+        src/client/StringHelpers.cpp
+        src/client/Worker.cpp
+)
+
 # Consolidated application sources
-set(APP_SOURCES
+set(SERVER_SOURCES
         ${RESPVALUE_SOURCES}
         ${REQUEST_SOURCES}
         ${STORE_SOURCES}
         ${LOGGING_SOURCES}
         ${PUBSUB_SOURCES}
         ${HANDLER_SOURCES}
-        ${TOP_SOURCES}
+        ${TOP_SERVER_SOURCES}
+)
+
+set(CLIENT_SOURCES
+        ${RESPVALUE_SOURCES}
+        ${NETWORK_SOURCES}
+        ${TOP_CLIENT_SOURCES}
 )
 
 # Server executable
-add_executable(my_redis_server src/server/main.cpp ${APP_SOURCES})
+add_executable(my_redis_server src/server/main.cpp ${SERVER_SOURCES})
 target_include_directories(my_redis_server PRIVATE src/server)
+target_include_directories(my_redis_server PRIVATE src)
 
 # Client executable
-add_executable(my_redis_client src/client/main.cpp)
+add_executable(my_redis_client src/client/main.cpp ${CLIENT_SOURCES})
 target_include_directories(my_redis_client PRIVATE src/client)
+target_include_directories(my_redis_client PRIVATE src)
+target_include_directories(my_redis_client PRIVATE thirdparty)
 
 # --- Testing ---
 # Only include tests if the TESTS option is ON (default: OFF)
@@ -105,7 +123,7 @@ if (BUILD_TESTS)
     # Add the test executable with its own sources plus the library sources
     add_executable(parser_tests
             tests/ParserTests.cpp
-            src/server/respvalue/RespValue.cpp
+            src/respvalue/RespValue.cpp
     )
     add_executable(map_tests
             tests/MapTests.cpp
@@ -118,7 +136,9 @@ if (BUILD_TESTS)
 
     # Include directories for the test executable
     target_include_directories(parser_tests PRIVATE src/server)
+    target_include_directories(parser_tests PRIVATE src)
     target_include_directories(map_tests PRIVATE src/server)
+    target_include_directories(map_tests PRIVATE src)
 
     include(GoogleTest)
     gtest_discover_tests(parser_tests)

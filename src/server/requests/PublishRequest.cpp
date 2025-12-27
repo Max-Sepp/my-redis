@@ -11,7 +11,8 @@ PublishRequest::PublishRequest(const RespValue& resp_value) {
 
   if (request_array.size() != 3)
     throw std::invalid_argument(
-        "Publish must have exactly three elements: PUBLISH, channel, and message");
+        "Publish must have exactly three elements: PUBLISH, channel, and "
+        "message");
 
   const RespValue& publish = request_array[0];
   const RespValue& channel = request_array[1];
