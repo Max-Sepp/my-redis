@@ -20,6 +20,7 @@ class RespValue {
 
   [[nodiscard]] std::string serialize() const;
   [[nodiscard]] const RespVariant& getValue() const;
+  [[nodiscard]] std::string show() const;
 
   static std::pair<RespValue, size_t> FromString(const std::string& str);
   static RespValue FromVariant(const RespVariant& variant);

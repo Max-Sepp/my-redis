@@ -150,6 +150,36 @@ std::string RespValue::serialize() const {
 
 const RespValue::RespVariant& RespValue::getValue() const { return value_; }
 
+std::string RespValue::show() const {
+  return std::visit(
+      []<typename RespVariant>(const RespVariant& val) -> std::string {
+        using T = std::decay_t<RespVariant>;
+
+        if constexpr (std::is_same_v<T, RespSimpleString>) {
+          return "\"" + val + "\"";
+        } else if constexpr (std::is_same_v<T, RespSimpleError>) {
+          return "error: " + val.message;
+        } else if constexpr (std::is_same_v<T, RespInteger>) {
+          return std::to_string(val);
+        } else if constexpr (std::is_same_v<T, RespBulkString>) {
+          if (!val.has_value()) {
+            return "(NIL)";
+          }
+          const std::string& str = val.value();
+          return "\"" + str + "\"";
+        } else if constexpr (std::is_same_v<T, RespArray>) {
+          std::string result;
+          for (size_t i = 0; i < val.size(); i++) {
+            if (i != 0) result += "\n";
+            result += std::to_string(i + 1) + ") " + val[i].show();
+          }
+          return result;
+        }
+        throw std::invalid_argument("Resp Value variant not a valid variant");
+      },
+      value_);
+}
+
 std::pair<RespValue, size_t> RespValue::FromString(const std::string& str) {
   size_t pos = 0;
   return std::make_pair(RespValue(parseVariant(str, pos)), pos);
