@@ -21,7 +21,7 @@ class StripedHashmap final : public Map<K, V> {
   size_t size_ = 0;
   std::vector<std::unique_ptr<Entry>> entries_;
   double load_factor_;
-  std::vector<std::recursive_mutex> locks_;
+  std::vector<std::mutex> locks_;
 
   size_t GetBucketIndex(const K &key) { return hash_(key) % entries_.size(); }
   size_t GetLockIndex(const K &key) { return hash_(key) % locks_.size(); }
@@ -51,9 +51,9 @@ class StripedHashmap final : public Map<K, V> {
 
   void Resize() {
     // Acquire all locks
-    std::vector<std::unique_lock<std::recursive_mutex>> locks;
+    std::vector<std::unique_lock<std::mutex>> locks;
     locks.reserve(locks_.size());
-    for (std::recursive_mutex &lock : locks_) locks.emplace_back(lock);
+    for (std::mutex &lock : locks_) locks.emplace_back(lock);
 
     std::vector<std::pair<K, V>> flat_entries;
     for (auto &bucket : entries_) {
@@ -81,7 +81,7 @@ class StripedHashmap final : public Map<K, V> {
       : hash_(std::move(hash)),
         entries_(std::vector<std::unique_ptr<Entry>>(DEFAULT_CAPACITY)),
         load_factor_(load_factor),
-        locks_(std::vector<std::recursive_mutex>(num_locks)) {}
+        locks_(std::vector<std::mutex>(num_locks)) {}
 
   std::optional<std::reference_wrapper<const V>> LookUp(const K &key) override {
     std::lock_guard lock(locks_[GetLockIndex(key)]);
@@ -99,9 +99,13 @@ class StripedHashmap final : public Map<K, V> {
   }
 
   void Insert(K key, V value) override {
-    std::lock_guard lock(locks_[GetLockIndex(key)]);
+    std::unique_lock lock(locks_[GetLockIndex(key)]);
 
-    if (entries_.empty() || size_ > entries_.size() * load_factor_) Resize();
+    if (entries_.empty() || size_ > entries_.size() * load_factor_) {
+      lock.unlock();
+      Resize();
+      lock.lock();
+    }
 
     InsertWithoutResize(std::move(key), std::move(value));
   }
@@ -129,9 +133,9 @@ class StripedHashmap final : public Map<K, V> {
 
   void ForEach(std::function<void(const K &, const V &)> action) override {
     // Acquire all locks
-    std::vector<std::unique_lock<std::recursive_mutex>> locks;
+    std::vector<std::unique_lock<std::mutex>> locks;
     locks.reserve(locks_.size());
-    for (std::recursive_mutex &lock : locks_) locks.emplace_back(lock);
+    for (std::mutex &lock : locks_) locks.emplace_back(lock);
 
     // Perform action on all entries
     for (const auto &bucket : entries_) {
