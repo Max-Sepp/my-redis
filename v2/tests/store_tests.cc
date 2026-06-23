@@ -1,0 +1,356 @@
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "store/hash.h"
+#include "store/linear_probing_hashmap.h"
+#include "store/linked_list_hashmap.h"
+#include "store/map.h"
+#include "store/standard_map.h"
+
+using myredis::kDefaultLoadFactor;
+using myredis::LinearProbingHashmap;
+using myredis::LinkedListHashmap;
+using myredis::Map;
+using myredis::StandardMap;
+using myredis::StringHash;
+
+struct LinearProbingHashmapStringIntFactory {
+  static std::unique_ptr<Map<std::string, int>> create() {
+    // Use small initial capacity to make resize easier to trigger in tests
+    return std::make_unique<LinearProbingHashmap<std::string, int>>(
+        kDefaultLoadFactor, StringHash, 2);
+  }
+};
+
+struct LinkedListHashmapStringIntFactory {
+  static std::unique_ptr<Map<std::string, int>> create() {
+    return std::make_unique<LinkedListHashmap<std::string, int>>(
+        kDefaultLoadFactor, StringHash);
+  }
+};
+
+struct StandardMapFactory {
+  static std::unique_ptr<Map<std::string, int>> create() {
+    return std::make_unique<StandardMap<std::string, int>>();
+  }
+};
+
+// 1. Template the test fixture on a type `T`
+template <typename MapFactory>
+class MapTest : public ::testing::Test {
+ protected:
+  void SetUp() override { map = MapFactory::create(); }
+
+  std::unique_ptr<Map<std::string, int>> map;
+};
+
+// List of types to be tested
+using Implementations =
+    ::testing::Types<LinearProbingHashmapStringIntFactory, StandardMapFactory,
+                     LinkedListHashmapStringIntFactory>;
+
+TYPED_TEST_SUITE(MapTest, Implementations);
+
+TYPED_TEST(MapTest, InsertAndLookUp) {
+  this->map->Insert(std::string("one"), 1);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(opt->get(), 1);
+}
+
+TYPED_TEST(MapTest, LookUpNonExistent) {
+  auto opt = this->map->LookUp(std::string("nonexistent"));
+  EXPECT_FALSE(opt.has_value());
+}
+
+TYPED_TEST(MapTest, InsertRemoveLookUp) {
+  this->map->Insert(std::string("one"), 1);
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
+}
+
+TYPED_TEST(MapTest, RemoveNonExistent) {
+  ASSERT_NO_THROW(this->map->Remove(std::string("nonexistent")));
+}
+
+TYPED_TEST(MapTest, UpdateValue) {
+  this->map->Insert(std::string("one"), 1);
+  constexpr int kUpdatedValue = 100;
+  this->map->Insert(std::string("one"), kUpdatedValue);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(opt->get(), kUpdatedValue);
+}
+
+TYPED_TEST(MapTest, MultipleInsertions) {
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+  this->map->Insert(std::string("three"), 3);
+
+  const auto value_one = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(value_one.has_value());
+  EXPECT_EQ(value_one->get(), 1);
+
+  const auto value_two = this->map->LookUp(std::string("two"));
+  ASSERT_TRUE(value_two.has_value());
+  EXPECT_EQ(value_two->get(), 2);
+
+  const auto value_three = this->map->LookUp(std::string("three"));
+  ASSERT_TRUE(value_three.has_value());
+  EXPECT_EQ(value_three->get(), 3);
+}
+
+TYPED_TEST(MapTest, OperationsAreIsolated) {
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
+
+  const auto value_two = this->map->LookUp(std::string("two"));
+  ASSERT_TRUE(value_two.has_value());
+  EXPECT_EQ(value_two->get(), 2);
+}
+
+// Performance-based tests: do not rely on internals. These tests will fail
+// if inserting or looking up many elements is too slow. Thresholds are
+// intentionally generous but will catch extremely slow implementations.
+TYPED_TEST(MapTest, BulkInsertPerformance) {
+  // Skip very small runs for StandardMap as its behaviour is fine; we still
+  // want to run the test for all implementations.
+  constexpr size_t kNumElements = 10000;
+  using clock = std::chrono::high_resolution_clock;
+
+  const auto start = clock::now();
+  for (size_t i = 0; i < kNumElements; ++i) {
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
+  }
+  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      clock::now() - start);
+
+  // If inserting kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
+  EXPECT_LT(duration.count(), 200)
+      << "Bulk insert too slow: " << duration.count() << " ms";
+}
+
+TYPED_TEST(MapTest, BulkLookupPerformance) {
+  constexpr size_t kNumElements = 10000;
+  using clock = std::chrono::high_resolution_clock;
+
+  // Ensure the map is populated.
+  for (size_t i = 0; i < kNumElements; ++i) {
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
+  }
+
+  auto start = clock::now();
+  for (size_t i = 0; i < kNumElements; ++i) {
+    const auto value = this->map->LookUp(std::to_string(i));
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(value->get(), static_cast<int>(i));
+  }
+  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      clock::now() - start);
+
+  // If looking up kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
+  EXPECT_LT(duration.count(), 200)
+      << "Bulk lookup too slow: " << duration.count() << " ms";
+}
+
+TYPED_TEST(MapTest, BulkRemovePerformance) {
+  constexpr size_t kNumElements = 10000;
+  using clock = std::chrono::high_resolution_clock;
+
+  // Ensure the map is populated.
+  for (size_t i = 0; i < kNumElements; ++i) {
+    this->map->Insert(std::to_string(i), static_cast<int>(i));
+  }
+
+  auto start = clock::now();
+  for (size_t i = 0; i < kNumElements; ++i) {
+    this->map->Remove(std::to_string(i));
+  }
+  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      clock::now() - start);
+
+  // If removing kNumElements elements takes longer than 200 ms, consider it a
+  // failure.
+  EXPECT_LT(duration.count(), 200)
+      << "Bulk remove too slow: " << duration.count() << " ms";
+}
+
+// --- Benchmarking Tests ---
+// These tests are not for correctness but for performance comparison.
+// They will output the timings of different implementations for bulk
+// operations.
+TEST(MapBenchmark, CompareImplementations) {
+  constexpr size_t kBenchmarkSize = 50000;
+  using clock = std::chrono::high_resolution_clock;
+
+  std::map<std::string, std::function<std::unique_ptr<Map<std::string, int>>()>>
+      factories;
+  factories["StandardMap"] = &StandardMapFactory::create;
+  factories["LinkedListHashmap"] = &LinkedListHashmapStringIntFactory::create;
+  factories["LinearProbingHashmap"] =
+      &LinearProbingHashmapStringIntFactory::create;
+
+  std::cout << "\n"
+            << "[==========] Running MapBenchmark for N = " << kBenchmarkSize
+            << " operations." << "\n";
+
+  // --- Insert benchmark ---
+  std::cout << "[ BENCHMARK ] Bulk Insert" << "\n";
+  for (auto const& [name, factory] : factories) {
+    auto map = factory();
+    const auto start = clock::now();
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
+      map->Insert(std::to_string(i), static_cast<int>(i));
+    }
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        clock::now() - start);
+    std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
+              << "\n";
+  }
+
+  // --- Lookup benchmark ---
+  std::cout << "[ BENCHMARK ] Bulk Lookup" << "\n";
+  for (auto const& [name, factory] : factories) {
+    auto map = factory();
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
+      map->Insert(std::to_string(i), static_cast<int>(i));
+    }
+    const auto start = clock::now();
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
+      map->LookUp(std::to_string(i));
+    }
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        clock::now() - start);
+    std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
+              << "\n";
+  }
+
+  // --- Remove benchmark ---
+  std::cout << "[ BENCHMARK ] Bulk Remove" << "\n";
+  for (auto const& [name, factory] : factories) {
+    auto map = factory();
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
+      map->Insert(std::to_string(i), static_cast<int>(i));
+    }
+    const auto start = clock::now();
+    for (size_t i = 0; i < kBenchmarkSize; ++i) {
+      map->Remove(std::to_string(i));
+    }
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        clock::now() - start);
+    std::cout << "[ RESULT    ] " << name << ": " << duration.count() << " ms"
+              << "\n";
+  }
+  std::cout << "[==========] Finished MapBenchmark." << "\n";
+}
+
+// Additional tests: use std::unique_ptr<std::string> as the mapped value
+
+struct LinearProbingHashmapStringUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        LinearProbingHashmap<std::string, std::unique_ptr<std::string>>>(
+        kDefaultLoadFactor, StringHash, 2);
+  }
+};
+
+struct LinkedListHashmapStringUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        LinkedListHashmap<std::string, std::unique_ptr<std::string>>>(
+        kDefaultLoadFactor, StringHash);
+  }
+};
+
+struct StandardMapUniquePtrFactory {
+  static std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>>
+  create() {
+    return std::make_unique<
+        StandardMap<std::string, std::unique_ptr<std::string>>>();
+  }
+};
+
+template <typename MapFactory>
+class MapTestUniquePtr : public ::testing::Test {
+ protected:
+  void SetUp() override { map = MapFactory::create(); }
+
+  std::unique_ptr<Map<std::string, std::unique_ptr<std::string>>> map;
+};
+
+using ImplementationsUniquePtr =
+    ::testing::Types<LinearProbingHashmapStringUniquePtrFactory,
+                     StandardMapUniquePtrFactory,
+                     LinkedListHashmapStringUniquePtrFactory>;
+
+TYPED_TEST_SUITE(MapTestUniquePtr, ImplementationsUniquePtr);
+
+TYPED_TEST(MapTestUniquePtr, InsertAndLookUpUniquePtr) {
+  auto value = std::make_unique<std::string>("hello");
+  this->map->Insert(std::string("one"), std::move(value));
+  EXPECT_EQ(value, nullptr);
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(*opt->get(), "hello");
+}
+
+TYPED_TEST(MapTestUniquePtr, UpdateValueUniquePtr) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("first"));
+  this->map->Insert(std::string("one"),
+                    std::make_unique<std::string>("second"));
+  auto opt = this->map->LookUp(std::string("one"));
+  ASSERT_TRUE(opt.has_value());
+  EXPECT_EQ(*opt->get(), "second");
+}
+
+TYPED_TEST(MapTestUniquePtr, RemoveAndLookUp) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("x"));
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->LookUp(std::string("one")).has_value());
+}
+
+TYPED_TEST(MapTest, ForEachCollectsAllItems) {
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+  this->map->Insert(std::string("three"), 3);
+
+  std::map<std::string, int> gathered;
+  this->map->ForEach(
+      [&](const std::string& key, const int& value) { gathered[key] = value; });
+
+  EXPECT_EQ(gathered.size(), 3);
+  EXPECT_EQ(gathered["one"], 1);
+  EXPECT_EQ(gathered["two"], 2);
+  EXPECT_EQ(gathered["three"], 3);
+}
+
+TYPED_TEST(MapTestUniquePtr, ForEachUniquePtrCollectsAllItems) {
+  this->map->Insert(std::string("one"), std::make_unique<std::string>("a"));
+  this->map->Insert(std::string("two"), std::make_unique<std::string>("b"));
+  this->map->Insert(std::string("three"), std::make_unique<std::string>("c"));
+
+  std::map<std::string, std::string> gathered;
+  this->map->ForEach(
+      [&](const std::string& key, const std::unique_ptr<std::string>& value) {
+        if (value) gathered[key] = *value;
+      });
+
+  EXPECT_EQ(gathered.size(), 3);
+  EXPECT_EQ(gathered["one"], "a");
+  EXPECT_EQ(gathered["two"], "b");
+  EXPECT_EQ(gathered["three"], "c");
+}

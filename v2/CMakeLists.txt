@@ -38,8 +38,22 @@ target_include_directories(my_redis_client PRIVATE src)
 target_include_directories(my_redis_client PRIVATE thirdparty)
 
 # --- Server executable -------------------------------------------------------
-# TODO(v2): reimplement the server here. It will reuse RESP_VALUE_SOURCES,
-# NETWORK_SOURCES and src/concurrent/concurrent_queue.h (header-only).
+# A single main thread executes commands; a pool of IO threads handle sockets
+# and RESP parsing. Reuses RESP_VALUE_SOURCES plus the header-only concurrent
+# queues; FlushOutBuffer does its own partial-write tracking so NETWORK_SOURCES
+# (SendAll) is not needed here.
+
+set(SERVER_SOURCES
+        ${RESP_VALUE_SOURCES}
+        src/concurrent/event_fd.cc
+        src/server/handler/request_dispatcher.cc
+        src/server/io_thread.cc
+        src/server/server.cc
+)
+
+add_executable(my_redis_server src/server/main.cc ${SERVER_SOURCES})
+target_include_directories(my_redis_server PRIVATE src)
+target_include_directories(my_redis_server PRIVATE thirdparty)
 
 # --- Testing -----------------------------------------------------------------
 # Only include tests if the TESTS option is ON (default: OFF)
@@ -78,6 +92,16 @@ if (BUILD_TESTS)
     # Include directories for the test executable
     target_include_directories(parser_tests PRIVATE src)
 
+    # Store tests: the non-concurrent maps are header-only and depend on the
+    # store/hash.cc helper.
+    add_executable(store_tests
+            tests/store_tests.cc
+            src/store/hash.cc
+    )
+    target_link_libraries(store_tests PRIVATE GTest::gtest_main)
+    target_include_directories(store_tests PRIVATE src)
+
     include(GoogleTest)
     gtest_discover_tests(parser_tests)
+    gtest_discover_tests(store_tests)
 endif ()

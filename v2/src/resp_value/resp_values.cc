@@ -4,6 +4,10 @@ namespace myredis {
 
 RespValue NullBulkString() { return RespValue::FromVariant(std::nullopt); }
 
+RespValue SimpleString(const std::string& string) {
+  return RespValue::FromVariant(RespValue::RespSimpleString{string});
+}
+
 RespValue BulkString(const std::optional<std::string>& string) {
   return RespValue::FromVariant(string);
 }

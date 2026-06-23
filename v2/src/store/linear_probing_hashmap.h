@@ -1,0 +1,173 @@
+
+
+#ifndef MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
+#define MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
+
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <optional>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include "store/map.h"
+
+namespace myredis {
+
+template <typename K, typename V>
+class LinearProbingHashmap final : public Map<K, V> {
+  enum State { EMPTY, DELETED, ELEMENT };
+  struct Entry {
+    Entry() : state(EMPTY), key(std::nullopt), value(std::nullopt) {}
+    Entry(const State state, const std::optional<K>& key,
+          const std::optional<V>& value)
+        : state(state), key(key), value(value) {}
+    State state;
+    std::optional<K> key;
+    std::optional<V> value;
+  };
+
+  std::function<size_t(const K&)> hash_;
+  double load_factor_;
+  std::vector<Entry> entries_;
+  size_t size_ = 0;
+
+ public:
+  LinearProbingHashmap(const LinearProbingHashmap& other)
+    requires std::is_copy_constructible_v<K> && std::is_copy_constructible_v<V>
+      : Map<K, V>(other),
+        hash_(other.hash_),
+        load_factor_(other.load_factor_),
+        entries_(other.entries_),
+        size_(other.size_) {}
+
+  LinearProbingHashmap(LinearProbingHashmap&& other) noexcept
+      : Map<K, V>(std::move(other)),
+        hash_(std::move(other.hash_)),
+        load_factor_(other.load_factor_),
+        entries_(std::move(other.entries_)),
+        size_(other.size_) {}
+
+  LinearProbingHashmap& operator=(const LinearProbingHashmap& other)
+    requires std::is_copy_constructible_v<K> && std::is_copy_constructible_v<V>
+  {
+    if (this == &other) return *this;
+    Map<K, V>::operator=(other);
+    hash_ = other.hash_;
+    load_factor_ = other.load_factor_;
+    entries_ = other.entries_;
+    size_ = other.size_;
+    return *this;
+  }
+
+  LinearProbingHashmap& operator=(LinearProbingHashmap&& other) noexcept {
+    if (this == &other) return *this;
+    Map<K, V>::operator=(std::move(other));
+    hash_ = std::move(other.hash_);
+    load_factor_ = other.load_factor_;
+    entries_ = std::move(other.entries_);
+    size_ = other.size_;
+    return *this;
+  }
+
+  LinearProbingHashmap(const double load_factor,
+                       std::function<size_t(const K&)> hash,
+                       const size_t initial_capacity = kDefaultCapacity) {
+    this->hash_ = std::move(hash);
+    this->load_factor_ = load_factor;
+    this->entries_ = std::vector<Entry>(initial_capacity);
+  }
+
+  std::optional<std::reference_wrapper<const V>> LookUp(const K& key) override {
+    const int value_bucket_index = InternalFind(key);
+
+    if (value_bucket_index != -1) {
+      assert(entries_[value_bucket_index].value.has_value());
+      return std::optional<std::reference_wrapper<const V>>(
+          std::cref(entries_[value_bucket_index].value.value()));
+    }
+
+    return std::nullopt;
+  }
+
+  void Insert(K key, V value) override {
+    InsertWithoutSize(std::move(key), std::move(value));
+    size_++;
+  }
+
+  void Remove(const K& key) override {
+    const int bucket_index = InternalFind(key);
+    if (bucket_index != -1) {
+      entries_[bucket_index].state = DELETED;
+    }
+  }
+
+  void ForEach(std::function<void(const K&, const V&)> action) override {
+    for (const Entry& entry : entries_) {
+      if (entry.state != ELEMENT) continue;
+
+      assert(entry.key.has_value() && entry.value.has_value());
+      action(entry.key.value(), entry.value.value());
+    }
+  }
+
+ private:
+  void InsertWithoutSize(K key, V value) {
+    if (size_ > load_factor_ * entries_.size()) {
+      Resize();
+    }
+
+    size_t bucket_index = hash_(key) % entries_.size();
+    while (entries_[bucket_index].state == ELEMENT &&
+           entries_[bucket_index].key.has_value() &&
+           entries_[bucket_index].key.value() != key) {
+      bucket_index = (bucket_index + 1) % entries_.size();
+    }
+
+    entries_[bucket_index].state = ELEMENT;
+    entries_[bucket_index].key = std::move(key);
+    entries_[bucket_index].value = std::move(value);
+  }
+
+  void Resize() {
+    std::vector<Entry> old_entries = std::move(entries_);
+
+    entries_ = std::vector<Entry>(
+        std::max(static_cast<size_t>(2), old_entries.size() * 2));
+
+    for (Entry& entry : old_entries) {
+      if (entry.state != ELEMENT) continue;
+
+      assert(entry.key.has_value() && entry.value.has_value());
+      InsertWithoutSize(std::move(entry.key.value()),
+                        std::move(entry.value.value()));
+    }
+  }
+
+  // Returns -1 if key cannot be found
+  int InternalFind(const K& key) {
+    size_t bucket_index = hash_(key) % entries_.size();
+    const size_t initial_bucket_index = bucket_index;
+
+    while (entries_[bucket_index].state == DELETED ||
+           (entries_[bucket_index].state == ELEMENT &&
+            entries_[bucket_index].key.has_value() &&
+            entries_[bucket_index].key.value() != key)) {
+      bucket_index = (bucket_index + 1) % entries_.size();
+      if (bucket_index == initial_bucket_index) {
+        // Gone through every element in the hashmap and could not find the key
+        return -1;
+      }
+    }
+
+    if (entries_[bucket_index].state == ELEMENT) {
+      return static_cast<int>(bucket_index);
+    }
+    return -1;
+  }
+};
+
+}  // namespace myredis
+
+#endif  // MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
