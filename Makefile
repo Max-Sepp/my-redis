@@ -1,56 +1,45 @@
 CMAKE ?= cmake
-PRESET_DEBUG := debug
-PRESET_RELEASE := release
-BUILD_DIR := build
 
-.PHONY: help debug release build-debug build-release run-tests tests run clean
+.PHONY: help all debug release v1-debug v1-release v2-debug v2-release test clean
 
 help:
 	@echo "Usage:"
-	@echo "  make debug        # configure & build using the 'debug' preset"
-	@echo "  make release      # configure & build using the 'release' preset"
-	@echo "  make run-tests    # build (debug) and run test binaries"
-	@echo "  make clean        # remove build/ directory"
-	@echo "  make run          # runs the redis server"
+	@echo "  make debug        # configure & build v1 and v2 (Debug)"
+	@echo "  make release      # configure & build v1 and v2 (Release)"
+	@echo "  make v1-debug     # build only v1 (Debug)"
+	@echo "  make v1-release   # build only v1 (Release)"
+	@echo "  make v2-debug     # build only v2 (Debug)"
+	@echo "  make v2-release   # build only v2 (Release)"
+	@echo "  make test         # build (debug) and run v1 test suites"
+	@echo "  make clean        # remove v1/build and v2/build"
+	@echo ""
+	@echo "Build output: build/v1/<preset>/ and build/v2/<preset>/"
 
-debug:
-	@echo "Configuring and building (debug)..."
-	$(CMAKE) --preset $(PRESET_DEBUG)
-	$(CMAKE) --build --preset $(PRESET_DEBUG)
+all: debug
 
-release:
-	@echo "Configuring and building (release)..."
-	$(CMAKE) --preset $(PRESET_RELEASE)
-	$(CMAKE) --build --preset $(PRESET_RELEASE)
+debug: v1-debug v2-debug
+release: v1-release v2-release
 
-build-debug: debug
-build-release: release
+v1-debug:
+	@echo "==> v1 (debug)"
+	cd v1 && $(CMAKE) --preset debug && $(CMAKE) --build --preset debug
 
-run-tests: debug
-	@echo "Running test binaries from $(BUILD_DIR)/$(PRESET_DEBUG)..."
-	@bdir="$(BUILD_DIR)/$(PRESET_DEBUG)"; \
-	if [ -x "$$bdir/parser_tests" ]; then \
-	  echo "==> Running parser_tests"; $$bdir/parser_tests || exit $$?; \
-	else echo "parser_tests not found in $$bdir"; fi; \
-	if [ -x "$$bdir/map_tests" ]; then \
-	  echo "==> Running map_tests"; $$bdir/map_tests || exit $$?; \
-	else echo "map_tests not found in $$bdir"; fi
+v1-release:
+	@echo "==> v1 (release)"
+	cd v1 && $(CMAKE) --preset release && $(CMAKE) --build --preset release
 
-test: run-tests
+v2-debug:
+	@echo "==> v2 (debug)"
+	cd v2 && $(CMAKE) --preset debug && $(CMAKE) --build --preset debug
 
-run: debug
-	$(BUILD_DIR)/$(PRESET_DEBUG)/my_redis_server
+v2-release:
+	@echo "==> v2 (release)"
+	cd v2 && $(CMAKE) --preset release && $(CMAKE) --build --preset release
+
+# v2 has no tests yet, so delegate to v1's own test target.
+test:
+	$(MAKE) -C v1 run-tests
 
 clean:
-	@echo "Removing $(BUILD_DIR)/"
-	rm -rf $(BUILD_DIR)
-
-CLANG_TIDY := run-clang-tidy
-CLANG_BUILD_DIR := build/debug
-JOBS := $(shell nproc 2>/dev/null || echo 1)
-SRC_GLOBS := '*.c' '*.cc' '*.cpp' '*.cxx'
-
-clang-tidy:
-	git ls-files -z --cached --others --exclude-standard -- $(SRC_GLOBS) > /tmp/clang_tidy_files.$$; \
-	xargs -0 -n1000 $(CLANG_TIDY) -p $(CLANG_BUILD_DIR) -j $(JOBS) < /tmp/clang_tidy_files.$$; \
-	rm -f /tmp/clang_tidy_files.$$
+	@echo "Removing build/"
+	rm -rf build
