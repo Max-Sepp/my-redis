@@ -78,6 +78,16 @@ if (BUILD_TESTS)
     # Include directories for the test executable
     target_include_directories(parser_tests PRIVATE src)
 
+    # Store tests: the non-concurrent maps are header-only and depend on the
+    # store/hash.cc helper.
+    add_executable(store_tests
+            tests/store_tests.cc
+            src/store/hash.cc
+    )
+    target_link_libraries(store_tests PRIVATE GTest::gtest_main)
+    target_include_directories(store_tests PRIVATE src)
+
     include(GoogleTest)
     gtest_discover_tests(parser_tests)
+    gtest_discover_tests(store_tests)
 endif ()
