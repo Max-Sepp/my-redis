@@ -62,6 +62,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DBUILD_TESTS=ON
           -S ${{ github.workspace }}/v2
 
       - name: Build
@@ -72,5 +73,5 @@ jobs:
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
         # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        # v2 has no tests defined yet, so don't fail when none are found.
-        run: ctest --build-config ${{ matrix.build_type }} --no-tests=ignore
+        # Tests are built via -DBUILD_TESTS=ON in the configure step; fail if none are found.
+        run: ctest --build-config ${{ matrix.build_type }} --no-tests=error
