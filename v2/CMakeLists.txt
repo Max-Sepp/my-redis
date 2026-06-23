@@ -40,3 +40,44 @@ target_include_directories(my_redis_client PRIVATE thirdparty)
 # --- Server executable -------------------------------------------------------
 # TODO(v2): reimplement the server here. It will reuse RESP_VALUE_SOURCES,
 # NETWORK_SOURCES and src/concurrent/concurrent_queue.h (header-only).
+
+# --- Testing -----------------------------------------------------------------
+# Only include tests if the TESTS option is ON (default: OFF)
+option(BUILD_TESTS "Build the tests" OFF)
+
+# Automatically enable tests for Debug builds unless the user explicitly disabled them.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
+    set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
+endif ()
+
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "BUILD_TESTS = ${BUILD_TESTS}")
+
+if (BUILD_TESTS)
+    include(FetchContent)
+    FetchContent_Declare(
+            googletest
+            URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    # For Windows: Prevent overriding the parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    enable_testing()
+
+    # Add the test executable with its own sources plus the library sources
+    add_executable(parser_tests
+            tests/parser_tests.cc
+            src/resp_value/resp_value.cc
+    )
+
+    # Link the test executable against Google Test
+    target_link_libraries(parser_tests PRIVATE GTest::gtest_main)
+
+    # Include directories for the test executable
+    target_include_directories(parser_tests PRIVATE src)
+
+    include(GoogleTest)
+    gtest_discover_tests(parser_tests)
+endif ()
