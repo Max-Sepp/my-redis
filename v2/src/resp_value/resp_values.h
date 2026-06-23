@@ -6,6 +6,7 @@
 namespace myredis {
 
 RespValue NullBulkString();
+RespValue SimpleString(const std::string& string);
 RespValue BulkString(const std::optional<std::string>& string);
 RespValue Integer(long long num);
 RespValue Error(const std::string& message);

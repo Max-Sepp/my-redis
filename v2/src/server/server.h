@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "concurrent/event_fd.h"
+#include "server/handler/request_dispatcher.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
 
@@ -38,10 +39,13 @@ class Server {
   void ProcessCommands();
   void ExecuteAndRespond(const Command& command);
 
-  // Executes a single request and returns the serialized response bytes.
-  // STUB: currently echoes the request back. Real command dispatch and the
-  // single-threaded store come in a later step.
+  // Executes a single request via the dispatcher and returns the serialized
+  // response bytes.
   std::string Execute(const RespValue& request);
+
+  // Single command executor: the main thread owns the dispatcher and its store,
+  // so command execution needs no locking.
+  RequestDispatcher dispatcher_;
 
   int epoll_fd_ = -1;
   int listen_fd_ = -1;

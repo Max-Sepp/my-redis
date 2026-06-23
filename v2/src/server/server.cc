@@ -10,8 +10,14 @@
 #include <cerrno>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <string>
 #include <thread>
+#include <utility>
 #include <variant>
+
+#include "store/standard_map.h"
 
 namespace myredis {
 
@@ -61,7 +67,9 @@ unsigned NumIoThreads() {
 }  // namespace
 
 Server::Server(int port)
-    : epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
+    : dispatcher_(std::make_unique<
+                  StandardMap<std::string, std::optional<std::string>>>()),
+      epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
       listen_fd_(CreateListenSocket(port)) {
   const unsigned num_io_threads = NumIoThreads();
   io_threads_.reserve(num_io_threads);
@@ -74,15 +82,15 @@ Server::Server(int port)
   // Watch the listen socket (new connections) and the command eventfd
   // (IO threads have parsed requests to execute).
   for (const int watched_fd : {listen_fd_, command_event_.Fd()}) {
-    epoll_event ev{};
-    ev.events = EPOLLIN;
-    ev.data.fd = watched_fd;
-    epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, watched_fd, &ev);
+    epoll_event event{};
+    event.events = EPOLLIN;
+    event.data.fd = watched_fd;
+    epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, watched_fd, &event);
   }
 }
 
 Server::~Server() {
-  for (const auto& io : io_threads_) io->Stop();
+  for (const auto& io_thread : io_threads_) io_thread->Stop();
   if (listen_fd_ >= 0) close(listen_fd_);
   if (epoll_fd_ >= 0) close(epoll_fd_);
 }
@@ -93,7 +101,7 @@ int Server::Run() {
     return EXIT_FAILURE;
   }
 
-  for (const auto& io : io_threads_) io->Start();
+  for (const auto& io_thread : io_threads_) io_thread->Start();
   std::cout << "Server listening with " << io_threads_.size()
             << " IO thread(s)\n";
 
@@ -107,10 +115,10 @@ int Server::Run() {
     }
 
     for (int i = 0; i < nfds; ++i) {
-      const epoll_event& ev = events[i];
-      if (ev.data.fd == listen_fd_) {
+      const epoll_event& event = events[i];
+      if (event.data.fd == listen_fd_) {
         AcceptConnections();
-      } else if (ev.data.fd == command_event_.Fd()) {
+      } else if (event.data.fd == command_event_.Fd()) {
         command_event_.Drain();
         ProcessCommands();
       }
@@ -138,8 +146,8 @@ void Server::AssignToIoThread(int client_fd) {
 void Server::ProcessCommands() {
   // Drain every IO thread's outbox. (A single shared command eventfd wakes us;
   // we do not know which thread signalled, so we check them all.)
-  for (const auto& io : io_threads_) {
-    while (std::optional<OutboxMsg> msg = io->GetOutboxMsg()) {
+  for (const auto& io_thread : io_threads_) {
+    while (std::optional<OutboxMsg> msg = io_thread->GetOutboxMsg()) {
       if (const auto* command = std::get_if<Command>(&*msg)) {
         ExecuteAndRespond(*command);
       } else if (const auto* disconnect = std::get_if<Disconnect>(&*msg)) {
@@ -152,15 +160,13 @@ void Server::ProcessCommands() {
 void Server::ExecuteAndRespond(const Command& command) {
   std::string response = Execute(command.value);
 
-  const auto it = fd_to_thread_.find(command.fd);
-  if (it == fd_to_thread_.end()) return;  // client disconnected meanwhile
-  io_threads_[it->second]->PostResponse(command.fd, std::move(response));
+  const auto iter = fd_to_thread_.find(command.fd);
+  if (iter == fd_to_thread_.end()) return;  // client disconnected meanwhile
+  io_threads_[iter->second]->PostResponse(command.fd, std::move(response));
 }
 
 std::string Server::Execute(const RespValue& request) {
-  // STUB: echo the parsed request straight back. Real command dispatch and the
-  // single-threaded store will replace this in a later step.
-  return request.Serialize();
+  return dispatcher_.Dispatch(request).Serialize();
 }
 
 }  // namespace myredis

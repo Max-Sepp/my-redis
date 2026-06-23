@@ -46,6 +46,7 @@ target_include_directories(my_redis_client PRIVATE thirdparty)
 set(SERVER_SOURCES
         ${RESP_VALUE_SOURCES}
         src/concurrent/event_fd.cc
+        src/server/handler/request_dispatcher.cc
         src/server/io_thread.cc
         src/server/server.cc
 )
