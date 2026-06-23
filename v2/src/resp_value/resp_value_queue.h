@@ -11,23 +11,23 @@ namespace myredis {
 
 class RespValueQueue {
  public:
-  /* Append `str` to the internal buffer and attempt to parse zero or more
-   * RespValue objects from the buffer. Parsed values are enqueued internally.
-   *
-   * Behavior:
-   * - The function appends all of `str` to the internal buffer_ and then
-   *   repeatedly attempts to parse RespValue objects from the buffer.
-   * - For each successfully parsed value, the value is moved into the internal
-   *   queue_ and the consumed prefix is removed from buffer_.
-   * - If parsing encounters incomplete input, RespValue::FromString will throw
-   *   std::out_of_range; this function catches that and leaves the (partial)
-   *   data in buffer_ waiting for more input.
-   * - If parsing fails with std::invalid_argument, that exception is not
-   *   caught here and will propagate to the caller.
-   */
+  // Appends `str` to the internal buffer. Parsing happens lazily in PopValue,
+  // so this never throws.
   void PushString(const std::string& str);
 
-  // Removes and returns the next parsed RespValue or null.
+  /* Parses as many RespValue objects as the buffer allows, then removes and
+   * returns the next one (std::nullopt if none are available).
+   *
+   * Behavior:
+   * - Repeatedly attempts to parse RespValue objects from the front of the
+   *   buffer. Each successfully parsed value is moved into the internal queue_
+   *   and the consumed prefix is removed from the buffer.
+   * - If parsing encounters incomplete input, RespValue::FromString throws
+   *   std::out_of_range; this is caught and the (partial) data is left in the
+   *   buffer waiting for more input.
+   * - If parsing fails with std::invalid_argument (malformed framing), that
+   *   exception is not caught here and propagates to the caller.
+   */
   std::optional<RespValue> PopValue();
 
  private:

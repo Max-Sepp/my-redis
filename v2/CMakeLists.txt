@@ -38,8 +38,21 @@ target_include_directories(my_redis_client PRIVATE src)
 target_include_directories(my_redis_client PRIVATE thirdparty)
 
 # --- Server executable -------------------------------------------------------
-# TODO(v2): reimplement the server here. It will reuse RESP_VALUE_SOURCES,
-# NETWORK_SOURCES and src/concurrent/concurrent_queue.h (header-only).
+# A single main thread executes commands; a pool of IO threads handle sockets
+# and RESP parsing. Reuses RESP_VALUE_SOURCES plus the header-only concurrent
+# queues; FlushOutBuffer does its own partial-write tracking so NETWORK_SOURCES
+# (SendAll) is not needed here.
+
+set(SERVER_SOURCES
+        ${RESP_VALUE_SOURCES}
+        src/concurrent/event_fd.cc
+        src/server/io_thread.cc
+        src/server/server.cc
+)
+
+add_executable(my_redis_server src/server/main.cc ${SERVER_SOURCES})
+target_include_directories(my_redis_server PRIVATE src)
+target_include_directories(my_redis_server PRIVATE thirdparty)
 
 # --- Testing -----------------------------------------------------------------
 # Only include tests if the TESTS option is ON (default: OFF)
