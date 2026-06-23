@@ -9,8 +9,7 @@ namespace myredis {
 
 // Per-client state owned exclusively by the single IO thread that the client
 // was assigned to. Because exactly one thread touches a Connection, it needs no
-// locking (unlike v1's ClientConnection, which was shared across a worker pool
-// and guarded by a mutex).
+// locking.
 struct Connection {
   explicit Connection(int client_fd) : fd(client_fd) {}
 

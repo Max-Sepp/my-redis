@@ -10,9 +10,7 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
-# --- Reusable building blocks carried over from v1 ---------------------------
-# These packages are wrapped in `namespace myredis` and follow the Google C++
-# Style Guide. The new server is being reimplemented on top of them.
+# --- Reusable building blocks ------------------------------------------------
 
 set(RESP_VALUE_SOURCES
         src/resp_value/resp_value.cc
@@ -39,9 +37,7 @@ target_include_directories(my_redis_client PRIVATE thirdparty)
 
 # --- Server executable -------------------------------------------------------
 # A single main thread executes commands; a pool of IO threads handle sockets
-# and RESP parsing. Reuses RESP_VALUE_SOURCES plus the header-only concurrent
-# queues; FlushOutBuffer does its own partial-write tracking so NETWORK_SOURCES
-# (SendAll) is not needed here.
+# and RESP parsing.
 
 set(SERVER_SOURCES
         ${RESP_VALUE_SOURCES}
