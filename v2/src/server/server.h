@@ -16,8 +16,8 @@ namespace myredis {
 // The server's main thread. It owns the listening socket and is the single
 // command executor: IO threads parse client bytes into RESP requests and hand
 // them here, the main thread executes each one (single-threaded, so the store
-// will need no locking) and routes the response bytes back to the IO thread
-// that owns the client.
+// needs no locking) and routes the response bytes back to the IO thread that
+// owns the client.
 //
 // The main thread runs one epoll loop watching the listen socket (for new
 // connections) and a shared command eventfd (signalled by the IO threads when
@@ -55,7 +55,7 @@ class Server {
   // Maps a client fd to the index of the IO thread that owns it. Touched only
   // by the main thread (populated on accept, erased on Disconnect). Needed to
   // route a response to the owning thread even when the executed command
-  // targets a different client (e.g. future pub/sub fan-out).
+  // targets a different client.
   std::unordered_map<int, int> fd_to_thread_;
   std::size_t next_thread_ = 0;  // round-robin assignment cursor
 };

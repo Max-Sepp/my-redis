@@ -13,14 +13,10 @@
 namespace myredis {
 
 // Routes a parsed request to the first handler that claims it and returns the
-// response (ported from v1's HandlerDispatcher). Takes ownership of the command
-// store, which the handlers reference.
+// response. Takes ownership of the command store, which the handlers reference;
+// the store is injected so the dispatcher stays decoupled from any concrete Map.
 //
-// The store is injected by the main thread (which picks the concrete Map
-// implementation) rather than created here, so the dispatcher stays decoupled
-// from any particular store.
-//
-// Single-threaded: the server's main thread is the sole caller of Dispatch, so
+// Single-threaded: the sole caller of Dispatch is the server's main thread, so
 // the store needs no locking. Not thread-safe by design.
 class RequestDispatcher {
  public:
