@@ -17,6 +17,6 @@ int main(const int argc, const char* argv[]) {
   const int port = result["port"].as<int>();
   const int snapshot_interval = result["snapshot"].as<int>();
 
-  myredis::Server server(port, snapshot_interval);
+  myredis::Server server({.port = port, .snapshot_interval_ms = snapshot_interval});
   return server.Run();
 }

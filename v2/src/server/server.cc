@@ -108,14 +108,14 @@ unsigned NumIoThreads() {
 }
 }  // namespace
 
-Server::Server(int port, int snapshot_interval)
+Server::Server(ServerConfig config)
     : store_(std::make_unique<
              StandardMap<std::string, std::optional<std::string>>>()),
       dispatcher_(store_),
       snapshotter_(".", "dump-"),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
-      listen_fd_(CreateListenSocket(port)),
-      snapshot_fd_(CreateTimerIntervalFd(snapshot_interval)) {
+      listen_fd_(CreateListenSocket(config.port)),
+      snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)) {
   const unsigned num_io_threads = NumIoThreads();
   io_threads_.reserve(num_io_threads);
   for (unsigned i = 0; i < num_io_threads; ++i) {

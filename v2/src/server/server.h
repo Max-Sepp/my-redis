@@ -14,6 +14,12 @@
 
 namespace myredis {
 
+struct ServerConfig {
+  int port;
+  // Milliseconds between snapshots; <= 0 disables snapshotting.
+  int snapshot_interval_ms;
+};
+
 // The server's main thread. It owns the listening socket and is the single
 // command executor: IO threads parse client bytes into RESP requests and hand
 // them here, the main thread executes each one (single-threaded, so the store
@@ -25,7 +31,7 @@ namespace myredis {
 // they enqueue work).
 class Server {
  public:
-  explicit Server(int port, int snapshot_interval);
+  explicit Server(ServerConfig config);
   ~Server();
 
   Server(const Server&) = delete;
