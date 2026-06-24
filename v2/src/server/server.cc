@@ -235,13 +235,15 @@ void Server::CreateSnapshot() {
     return;
   }
 
-  int pfd = syscall(SYS_pidfd_open, pid, 0);
-  if (pfd == -1) {
+  // syscall returns long; a valid file descriptor always fits in int.
+  const long pidfd_open_result = syscall(SYS_pidfd_open, pid, 0);
+  if (pidfd_open_result == -1) {
     perror("pidfd_open");
     // Reap synchronously so we don't leak a zombie.
     waitpid(pid, nullptr, 0);
     return;
   }
+  const int pfd = static_cast<int>(pidfd_open_result);
 
   // Watch the pidfd so the main loop is woken to reap the child when it exits.
   snapshot_children_[pfd] = pid;
