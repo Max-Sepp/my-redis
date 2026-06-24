@@ -4,8 +4,6 @@
 #include <optional>
 #include <string>
 
-#include <utility>
-
 #include "resp_value/resp_values.h"
 #include "server/handler/del_request_handler.h"
 #include "server/handler/get_request_handler.h"
@@ -15,11 +13,11 @@
 namespace myredis {
 
 RequestDispatcher::RequestDispatcher(
-    std::unique_ptr<Map<std::string, std::optional<std::string>>> store)
-    : store_(std::move(store)) {
-  handlers_.push_back(std::make_unique<GetRequestHandler>(*store_));
-  handlers_.push_back(std::make_unique<SetRequestHandler>(*store_));
-  handlers_.push_back(std::make_unique<DelRequestHandler>(*store_));
+    const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store)
+    : store_(store) {
+  handlers_.push_back(std::make_unique<GetRequestHandler>(store_));
+  handlers_.push_back(std::make_unique<SetRequestHandler>(store_));
+  handlers_.push_back(std::make_unique<DelRequestHandler>(store_));
   // Must remain last: matches anything the handlers above rejected.
   handlers_.push_back(std::make_unique<UnknownRequestHandler>());
 }

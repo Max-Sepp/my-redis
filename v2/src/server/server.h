@@ -10,8 +10,15 @@
 #include "server/handler/request_dispatcher.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
+#include "snapshot/snapshotter.h"
 
 namespace myredis {
+
+struct ServerConfig {
+  int port;
+  // Milliseconds between snapshots; <= 0 disables snapshotting.
+  int snapshot_interval_ms;
+};
 
 // The server's main thread. It owns the listening socket and is the single
 // command executor: IO threads parse client bytes into RESP requests and hand
@@ -24,7 +31,7 @@ namespace myredis {
 // they enqueue work).
 class Server {
  public:
-  explicit Server(int port);
+  explicit Server(ServerConfig config);
   ~Server();
 
   Server(const Server&) = delete;
@@ -38,18 +45,32 @@ class Server {
   void AssignToIoThread(int client_fd);
   void ProcessCommands();
   void ExecuteAndRespond(const Command& command);
+  void CreateSnapshot();
+  // Reaps a finished snapshot child (identified by its pidfd) and stops
+  // watching it.
+  void ReapSnapshot(int pidfd);
 
   // Executes a single request via the dispatcher and returns the serialized
   // response bytes.
   std::string Execute(const RespValue& request);
 
+  // The store the dispatcher and its handlers reference. Declared before
+  // `dispatcher_` so it is constructed first: the dispatcher binds a reference
+  // to this handle during its own construction.
+  std::unique_ptr<Map<std::string, std::optional<std::string>>> store_;
+
   // Single command executor: the main thread owns the dispatcher and its store,
   // so command execution needs no locking.
   RequestDispatcher dispatcher_;
 
+  // Periodically forks to write the store to disk; see CreateSnapshot.
+  Snapshotter snapshotter_;
+
   int epoll_fd_ = -1;
   int listen_fd_ = -1;
-  EventFd command_event_;  // IO threads -> main wakeup; shared by all IO threads
+  int snapshot_fd_ = -1;
+  // IO threads -> main wakeup; shared by all IO threads
+  EventFd command_event_;
 
   std::vector<std::unique_ptr<IoThread>> io_threads_;
   // Maps a client fd to the index of the IO thread that owns it. Touched only
@@ -58,6 +79,10 @@ class Server {
   // targets a different client.
   std::unordered_map<int, int> fd_to_thread_;
   std::size_t next_thread_ = 0;  // round-robin assignment cursor
+
+  // Maps a snapshot child's pidfd to its pid so the main thread can reap the
+  // child (and remove the pidfd from epoll) once it exits.
+  std::unordered_map<int, int> snapshot_children_;
 };
 
 }  // namespace myredis

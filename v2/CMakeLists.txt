@@ -45,6 +45,8 @@ set(SERVER_SOURCES
         src/server/handler/request_dispatcher.cc
         src/server/io_thread.cc
         src/server/server.cc
+        src/snapshot/snapshotter.cc
+        src/store/serialise.cc
 )
 
 add_executable(my_redis_server src/server/main.cc ${SERVER_SOURCES})

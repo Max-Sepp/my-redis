@@ -14,14 +14,16 @@ namespace myredis {
 
 // Routes a parsed request to the first handler that claims it and returns the
 // response. Takes ownership of the command store, which the handlers reference;
-// the store is injected so the dispatcher stays decoupled from any concrete Map.
+// the store is injected so the dispatcher stays decoupled from any concrete
+// Map.
 //
 // Single-threaded: the sole caller of Dispatch is the server's main thread, so
 // the store needs no locking. Not thread-safe by design.
 class RequestDispatcher {
  public:
   explicit RequestDispatcher(
-      std::unique_ptr<Map<std::string, std::optional<std::string>>> store);
+      const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
+          store);
 
   RequestDispatcher(const RequestDispatcher&) = delete;
   RequestDispatcher& operator=(const RequestDispatcher&) = delete;
@@ -32,7 +34,7 @@ class RequestDispatcher {
 
  private:
   // Declared before `handlers_` so it outlives the handlers that reference it.
-  std::unique_ptr<Map<std::string, std::optional<std::string>>> store_;
+  const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store_;
   std::vector<std::unique_ptr<Handler>> handlers_;
 };
 
