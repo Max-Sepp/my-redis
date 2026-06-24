@@ -4,10 +4,16 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/timerfd.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <array>
+#include <cassert>
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -24,10 +30,12 @@ namespace myredis {
 namespace {
 constexpr std::size_t kMaxEvents = 64;
 constexpr int kConnectionBacklog = 16;
+constexpr long millisecondsInSecond = 1000;
+constexpr long nanosecondsInMillisecond = 1000000;
 
 // Creates a non-blocking TCP socket bound to `port` and listening on all
 // interfaces. Returns the fd, or -1 on failure (with a message on std::cerr).
-int CreateListenSocket(int port) {
+int CreateListenSocket(const int port) {
   const int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (listen_fd < 0) {
     std::perror("socket");
@@ -59,6 +67,40 @@ int CreateListenSocket(int port) {
   return listen_fd;
 }
 
+std::pair<long, long> ConvertMills(int mills) {
+  return std::make_pair(
+      mills / millisecondsInSecond,
+      (mills % millisecondsInSecond) * nanosecondsInMillisecond);
+}
+
+int CreateTimerIntervalFd(const int snapshot_interval) {
+  if (snapshot_interval <= 0) {
+    return snapshot_interval;
+  }
+
+  const int timer_fd =
+      timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+  if (timer_fd == -1) {
+    perror("timerfd_create");
+    exit(1);
+  }
+
+  const auto [seconds, nanoseconds] = ConvertMills(snapshot_interval);
+
+  itimerspec its{};
+  its.it_value.tv_sec = seconds;
+  its.it_value.tv_nsec = nanoseconds;
+  its.it_interval.tv_sec = seconds;
+  its.it_interval.tv_nsec = nanoseconds;
+
+  if (timerfd_settime(timer_fd, 0, &its, nullptr) == -1) {
+    perror("timerfd_settime");
+    exit(1);
+  }
+
+  return timer_fd;
+}
+
 unsigned NumIoThreads() {
   // Reserve one core for the main (command-executing) thread.
   const unsigned hardware = std::thread::hardware_concurrency();
@@ -66,11 +108,14 @@ unsigned NumIoThreads() {
 }
 }  // namespace
 
-Server::Server(int port)
-    : dispatcher_(std::make_unique<
-                  StandardMap<std::string, std::optional<std::string>>>()),
+Server::Server(int port, int snapshot_interval)
+    : store_(std::make_unique<
+             StandardMap<std::string, std::optional<std::string>>>()),
+      dispatcher_(store_),
+      snapshotter_(".", "dump-"),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
-      listen_fd_(CreateListenSocket(port)) {
+      listen_fd_(CreateListenSocket(port)),
+      snapshot_fd_(CreateTimerIntervalFd(snapshot_interval)) {
   const unsigned num_io_threads = NumIoThreads();
   io_threads_.reserve(num_io_threads);
   for (unsigned i = 0; i < num_io_threads; ++i) {
@@ -81,11 +126,13 @@ Server::Server(int port)
 
   // Watch the listen socket (new connections) and the command eventfd
   // (IO threads have parsed requests to execute).
-  for (const int watched_fd : {listen_fd_, command_event_.Fd()}) {
-    epoll_event event{};
-    event.events = EPOLLIN;
-    event.data.fd = watched_fd;
-    epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, watched_fd, &event);
+  for (const int watched_fd : {listen_fd_, command_event_.Fd(), snapshot_fd_}) {
+    if (watched_fd != -1) {
+      epoll_event event{};
+      event.events = EPOLLIN;
+      event.data.fd = watched_fd;
+      epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, watched_fd, &event);
+    }
   }
 }
 
@@ -121,6 +168,14 @@ int Server::Run() {
       } else if (event.data.fd == command_event_.Fd()) {
         command_event_.Drain();
         ProcessCommands();
+      } else if (event.data.fd == snapshot_fd_) {
+        uint64_t expirations;
+        ssize_t size = read(event.data.fd, &expirations, sizeof(expirations));
+        assert(size == sizeof(expirations));
+        CreateSnapshot();
+      } else {
+        // A snapshot child's pidfd became readable: the child has exited.
+        ReapSnapshot(event.data.fd);
       }
     }
   }
@@ -144,8 +199,8 @@ void Server::AssignToIoThread(int client_fd) {
 }
 
 void Server::ProcessCommands() {
-  // Drain every IO thread's outbox. (A single shared command eventfd wakes us;
-  // we do not know which thread signalled, so we check them all.)
+  // Drain every IO thread's outbox. (A single shared command eventfd wakes
+  // us; we do not know which thread signalled, so we check them all.)
   for (const auto& io_thread : io_threads_) {
     while (std::optional<OutboxMsg> msg = io_thread->GetOutboxMsg()) {
       if (const auto* command = std::get_if<Command>(&*msg)) {
@@ -167,6 +222,43 @@ void Server::ExecuteAndRespond(const Command& command) {
 
 std::string Server::Execute(const RespValue& request) {
   return dispatcher_.Dispatch(request).Serialize();
+}
+
+void Server::CreateSnapshot() {
+  const int pid = fork();
+  if (pid == 0) {
+    snapshotter_.Snapshot(store_);
+    _exit(0);
+  }
+  if (pid == -1) {
+    perror("fork");
+    return;
+  }
+
+  int pfd = syscall(SYS_pidfd_open, pid, 0);
+  if (pfd == -1) {
+    perror("pidfd_open");
+    // Reap synchronously so we don't leak a zombie.
+    waitpid(pid, nullptr, 0);
+    return;
+  }
+
+  // Watch the pidfd so the main loop is woken to reap the child when it exits.
+  snapshot_children_[pfd] = pid;
+  epoll_event event{};
+  event.events = EPOLLIN;
+  event.data.fd = pfd;
+  epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, pfd, &event);
+}
+
+void Server::ReapSnapshot(int pidfd) {
+  const auto iter = snapshot_children_.find(pidfd);
+  if (iter == snapshot_children_.end()) return;
+
+  waitpid(iter->second, nullptr, 0);
+  epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, pidfd, nullptr);
+  close(pidfd);
+  snapshot_children_.erase(iter);
 }
 
 }  // namespace myredis

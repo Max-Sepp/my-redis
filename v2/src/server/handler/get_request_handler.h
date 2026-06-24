@@ -1,6 +1,7 @@
 #ifndef MYREDIS_SERVER_HANDLER_GET_REQUEST_HANDLER_H_
 #define MYREDIS_SERVER_HANDLER_GET_REQUEST_HANDLER_H_
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -16,7 +17,9 @@ namespace myredis {
 // is absent (or was stored with a null value).
 class GetRequestHandler final : public Handler {
  public:
-  explicit GetRequestHandler(Map<std::string, std::optional<std::string>>& store)
+  explicit GetRequestHandler(
+      const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
+          store)
       : store_(store) {}
 
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
@@ -27,13 +30,15 @@ class GetRequestHandler final : public Handler {
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    const auto found = store_.LookUp(*command->args[0]);
+    const auto found = store_->LookUp(*command->args[0]);
     if (!found.has_value()) return NullBulkString();
     return BulkString(found->get());
   }
 
  private:
-  Map<std::string, std::optional<std::string>>& store_;
+  // Bound to the server's store handle, not the map itself, so the reference
+  // stays valid even if the underlying map is replaced (e.g. snapshot restore).
+  const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store_;
 };
 
 }  // namespace myredis
