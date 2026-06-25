@@ -14,6 +14,11 @@ namespace myredis {
 std::string SerialiseMapToJson(
     const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store);
 
+// Deserialise the JSON into store.
+void DeserialiseJsonToMap(
+    std::unique_ptr<Map<std::string, std::optional<std::string>>>& store,
+    const std::string& json_data);
+
 }  // namespace myredis
 
 #endif  // MYREDIS_STORE_SERIALISE_H_
