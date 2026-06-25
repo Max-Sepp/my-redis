@@ -4,14 +4,54 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <charconv>
 #include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #include "store/serialise.h"
 
 namespace myredis {
 namespace {
+
+constexpr std::string_view kSnapshotSuffix = ".snapshot.json";
+
+// Returns the path of the newest snapshot in `dir`: the file named
+// "<prefix><timestamp>.snapshot.json" with the largest timestamp, or nullopt if
+// there is none. The timestamp is compared numerically, not lexically, so the
+// millisecond counts sort correctly across digit-count boundaries. Leftover
+// ".tmp-*" files from an interrupted write don't carry the prefix and so are
+// ignored.
+std::optional<std::filesystem::path> LatestSnapshot(
+    const std::filesystem::path& dir, const std::string& prefix) {
+  std::optional<std::filesystem::path> best;
+  long long best_timestamp = -1;
+
+  std::error_code dir_error;
+  for (const auto& entry : std::filesystem::directory_iterator(dir, dir_error)) {
+    if (!entry.is_regular_file()) continue;
+    const std::string name = entry.path().filename().string();
+    if (!name.starts_with(prefix) || !name.ends_with(kSnapshotSuffix)) continue;
+
+    const char* first = name.data() + prefix.size();
+    const char* last = name.data() + name.size() - kSnapshotSuffix.size();
+    long long timestamp = 0;
+    const auto [ptr, errc] = std::from_chars(first, last, timestamp);
+    if (errc != std::errc() || ptr != last) continue;  // not all digits
+
+    if (timestamp > best_timestamp) {
+      best_timestamp = timestamp;
+      best = entry.path();
+    }
+  }
+  return best;
+}
+
 void DurableWrite(const std::filesystem::path& output_path,
                   const std::string& output) {
   std::filesystem::path dir = output_path.parent_path();
@@ -83,8 +123,36 @@ void Snapshotter::Snapshot(
                        .count();
 
   DurableWrite(output_dir_ / (snapshot_file_prefix_ +
-                              std::to_string(timestamp) + ".snapshot.json"),
+                              std::to_string(timestamp) +
+                              std::string(kSnapshotSuffix)),
                store_json);
+}
+
+bool Snapshotter::Restore(
+    std::unique_ptr<Map<std::string, std::optional<std::string>>>& store)
+    const {
+  const std::optional<std::filesystem::path> path =
+      LatestSnapshot(output_dir_, snapshot_file_prefix_);
+  if (!path) return true;
+
+  std::ifstream stream(*path, std::ios::binary);
+  if (!stream) {
+    std::cerr << "Could not open snapshot " << *path << "\n";
+    return false;
+  }
+  std::ostringstream buffer;
+  buffer << stream.rdbuf();
+
+  try {
+    DeserialiseJsonToMap(store, buffer.str());
+  } catch (const std::exception& e) {
+    std::cerr << "Could not parse snapshot " << *path << ": " << e.what()
+              << "\n";
+    return false;
+  }
+
+  std::cout << "Restored store from snapshot " << *path << "\n";
+  return true;
 }
 
 }  // namespace myredis

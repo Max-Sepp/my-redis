@@ -33,6 +33,12 @@ constexpr int kConnectionBacklog = 16;
 constexpr long millisecondsInSecond = 1000;
 constexpr long nanosecondsInMillisecond = 1000000;
 
+// Directory snapshots are written to and restored from, and the prefix the
+// Snapshotter gives each file. Used to construct the Snapshotter; it owns the
+// restore logic from there.
+constexpr const char* kSnapshotDir = ".";
+constexpr const char* kSnapshotPrefix = "dump-";
+
 // Creates a non-blocking TCP socket bound to `port` and listening on all
 // interfaces. Returns the fd, or -1 on failure (with a message on std::cerr).
 int CreateListenSocket(const int port) {
@@ -112,7 +118,7 @@ Server::Server(ServerConfig config)
     : store_(std::make_unique<
              StandardMap<std::string, std::optional<std::string>>>()),
       dispatcher_(store_),
-      snapshotter_(".", "dump-"),
+      snapshotter_(kSnapshotDir, kSnapshotPrefix),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
       listen_fd_(CreateListenSocket(config.port)),
       snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)) {
@@ -145,6 +151,15 @@ Server::~Server() {
 int Server::Run() {
   if (epoll_fd_ < 0 || listen_fd_ < 0) {
     std::cerr << "Server failed to initialise\n";
+    return EXIT_FAILURE;
+  }
+
+  // Restore the most recent snapshot before any client can be served. The main
+  // thread is the sole mutator of the store and no commands are executing yet,
+  // so this needs no locking. Refuse to start on a corrupt snapshot rather than
+  // silently come up empty and overwrite good data with the next snapshot.
+  if (!snapshotter_.Restore(store_)) {
+    std::cerr << "Server failed to restore snapshot\n";
     return EXIT_FAILURE;
   }
 
