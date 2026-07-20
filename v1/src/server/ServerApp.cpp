@@ -16,6 +16,7 @@
 #include "handler/UnknownRequestHandler.h"
 #include "handler/UnsubscribeRequestHandler.h"
 #include "logger/FileLogger.h"
+#include "logger/NullLogger.h"
 #include "store/Hash.h"
 #include "store/Map.h"
 #include "store/StripedHashmap.h"
@@ -24,8 +25,12 @@
 constexpr int EXPECTED_NUMBER_OF_CONCURRENT_CONNECTIONS = 16;
 constexpr int PORT = 6379;
 
-ServerApp::ServerApp() {
-  logger_ = std::make_shared<FileLogger>(std::cout);
+ServerApp::ServerApp(const bool enable_request_logging) {
+  if (enable_request_logging) {
+    logger_ = std::make_shared<FileLogger>(std::cout);
+  } else {
+    logger_ = std::make_shared<NullLogger>();
+  }
 
   // Initialise request executor
   const auto store =

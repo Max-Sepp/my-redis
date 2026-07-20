@@ -7,7 +7,10 @@
 
 class ServerApp {
  public:
-  ServerApp();
+  // When enable_request_logging is false (the default) a no-op logger is used,
+  // so the hot path does no per-request I/O. Pass true to log every request and
+  // response to stdout via FileLogger.
+  explicit ServerApp(bool enable_request_logging = false);
   ~ServerApp();
 
   // Non-copyable
