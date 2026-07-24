@@ -218,8 +218,8 @@ void Server::ProcessCommands() {
   // us; we do not know which thread signalled, so we check them all.)
   for (const auto& io_thread : io_threads_) {
     while (std::optional<OutboxMsg> msg = io_thread->GetOutboxMsg()) {
-      if (const auto* command = std::get_if<Command>(&*msg)) {
-        ExecuteAndRespond(*command);
+      if (const auto* batch = std::get_if<CommandBatch>(&*msg)) {
+        ExecuteAndRespond(*batch);
       } else if (const auto* disconnect = std::get_if<Disconnect>(&*msg)) {
         fd_to_thread_.erase(disconnect->fd);
       }
@@ -227,12 +227,19 @@ void Server::ProcessCommands() {
   }
 }
 
-void Server::ExecuteAndRespond(const Command& command) {
-  std::string response = Execute(command.value);
+void Server::ExecuteAndRespond(const CommandBatch& batch) {
+  // Execute the whole pipelined batch and concatenate the replies, then hand
+  // them back in a single PostResponse. Commands still run even if the client
+  // has since disconnected (their store side effects must persist); we only
+  // skip the write-back in that case.
+  std::string response;
+  for (const RespValue& value : batch.values) {
+    response += Execute(value);
+  }
 
-  const auto iter = fd_to_thread_.find(command.fd);
+  const auto iter = fd_to_thread_.find(batch.fd);
   if (iter == fd_to_thread_.end()) return;  // client disconnected meanwhile
-  io_threads_[iter->second]->PostResponse(command.fd, std::move(response));
+  io_threads_[iter->second]->PostResponse(batch.fd, std::move(response));
 }
 
 std::string Server::Execute(const RespValue& request) {

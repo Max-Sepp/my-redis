@@ -44,7 +44,7 @@ class Server {
   void AcceptConnections();
   void AssignToIoThread(int client_fd);
   void ProcessCommands();
-  void ExecuteAndRespond(const Command& command);
+  void ExecuteAndRespond(const CommandBatch& batch);
   void CreateSnapshot();
   // Reaps a finished snapshot child (identified by its pidfd) and stops
   // watching it.
