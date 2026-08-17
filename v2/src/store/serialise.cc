@@ -2,22 +2,20 @@
 
 #include <array>
 #include <cstdint>
-#include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
-#include <utility>
 
 namespace myredis {
+
 namespace {
 
-// Characters below this code point are control characters that JSON requires to
-// be escaped.
+// Characters below this code point are control characters that JSON requires
+// to be escaped.
 constexpr uint8_t kFirstPrintable = 0x20;
 constexpr uint8_t kNibbleMask = 0xf;
 
-// Appends value as a JSON string literal (surrounded by quotes, with the
-// characters required by RFC 8259 escaped) to out.
+}  // namespace
+
 void AppendJsonString(const std::string& value, std::string& out) {
   out.push_back('"');
   for (const char character : value) {
@@ -60,41 +58,14 @@ void AppendJsonString(const std::string& value, std::string& out) {
   out.push_back('"');
 }
 
-}  // namespace
-
-std::string SerialiseMapToJson(
-    const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
-        store) {
-  std::string out = "{";
-  bool first = true;
-
-  store->ForEach(
-      [&](const std::string& key, const std::optional<std::string>& value) {
-        if (!first) out.push_back(',');
-        first = false;
-
-        AppendJsonString(key, out);
-        out.push_back(':');
-        if (value.has_value()) {
-          AppendJsonString(*value, out);
-        } else {
-          out += "null";
-        }
-      });
-
-  out.push_back('}');
-  return out;
-}
-
-namespace {
-
-// Skips JSON insignificant whitespace starting at pos.
 void SkipWhitespace(const std::string& data, size_t& pos) {
   while (pos < data.size() && (data[pos] == ' ' || data[pos] == '\t' ||
                                data[pos] == '\n' || data[pos] == '\r')) {
     pos++;
   }
 }
+
+namespace {
 
 // The value a hex letter ('a'/'A') stands for.
 constexpr int kHexLetterBase = 10;
@@ -107,9 +78,8 @@ int HexValue(char chr) {
   return -1;
 }
 
-// Parses the JSON string literal at data[pos] (which must be the opening '"'),
-// unescaping it and advancing pos past the closing quote. The inverse of
-// AppendJsonString.
+}  // namespace
+
 std::string ParseJsonString(const std::string& data, size_t& pos) {
   if (pos >= data.size() || data[pos] != '"') {
     throw std::invalid_argument("expected '\"' to open string");
@@ -145,7 +115,7 @@ std::string ParseJsonString(const std::string& data, size_t& pos) {
           if (nibble < 0) throw std::invalid_argument("invalid \\u escape");
           code = (code << 4) | nibble;
         }
-        // SerialiseMapToJson only ever emits \u00XX (control bytes below
+        // AppendJsonString only ever emits \u00XX (control bytes below
         // kFirstPrintable); those are the only escapes that map back to a
         // single byte.
         constexpr int kMaxByteValue = 0xff;
@@ -160,64 +130,6 @@ std::string ParseJsonString(const std::string& data, size_t& pos) {
     }
   }
   throw std::invalid_argument("unterminated string");
-}
-
-}  // namespace
-
-void DeserialiseJsonToMap(
-    std::unique_ptr<Map<std::string, std::optional<std::string>>>& store,
-    const std::string& json_data) {
-  size_t pos = 0;
-  SkipWhitespace(json_data, pos);
-  if (pos >= json_data.size() || json_data[pos] != '{') {
-    throw std::invalid_argument("json data did not begin with \"{\"");
-  }
-  pos++;
-
-  SkipWhitespace(json_data, pos);
-  if (pos < json_data.size() && json_data[pos] == '}') {
-    pos++;  // empty object
-  } else {
-    while (true) {
-      SkipWhitespace(json_data, pos);
-      std::string key = ParseJsonString(json_data, pos);
-
-      SkipWhitespace(json_data, pos);
-      if (pos >= json_data.size() || json_data[pos] != ':') {
-        throw std::invalid_argument("expected ':' after key");
-      }
-      pos++;
-
-      SkipWhitespace(json_data, pos);
-      std::optional<std::string> value;
-      if (json_data.compare(pos, 4, "null") == 0) {
-        pos += 4;
-        value = std::nullopt;
-      } else {
-        value = ParseJsonString(json_data, pos);
-      }
-      store->Insert(std::move(key), std::move(value));
-
-      SkipWhitespace(json_data, pos);
-      if (pos >= json_data.size()) {
-        throw std::invalid_argument("unterminated object");
-      }
-      if (json_data[pos] == ',') {
-        pos++;
-        continue;
-      }
-      if (json_data[pos] == '}') {
-        pos++;
-        break;
-      }
-      throw std::invalid_argument("expected ',' or '}'");
-    }
-  }
-
-  SkipWhitespace(json_data, pos);
-  if (pos != json_data.size()) {
-    throw std::invalid_argument("trailing data after json object");
-  }
 }
 
 }  // namespace myredis

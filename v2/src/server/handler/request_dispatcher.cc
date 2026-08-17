@@ -1,7 +1,6 @@
 #include "server/handler/request_dispatcher.h"
 
 #include <memory>
-#include <optional>
 #include <string>
 
 #include "resp_value/resp_values.h"
@@ -15,8 +14,7 @@
 
 namespace myredis {
 
-RequestDispatcher::RequestDispatcher(
-    const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store)
+RequestDispatcher::RequestDispatcher(const std::unique_ptr<Store>& store)
     : store_(store) {
   handlers_.push_back(std::make_unique<GetRequestHandler>(store_));
   handlers_.push_back(std::make_unique<SetRequestHandler>(store_));

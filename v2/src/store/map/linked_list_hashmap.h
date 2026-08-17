@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "store/map.h"
+#include "store/map/map.h"
 
 namespace myredis {
 

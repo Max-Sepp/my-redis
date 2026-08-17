@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "store/map.h"
+#include "store/map/map.h"
 
 namespace myredis {
 

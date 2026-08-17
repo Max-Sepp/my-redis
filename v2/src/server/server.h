@@ -11,6 +11,7 @@
 #include "server/io_thread.h"
 #include "server/messages.h"
 #include "snapshot/snapshotter.h"
+#include "store/store.h"
 
 namespace myredis {
 
@@ -57,7 +58,7 @@ class Server {
   // The store the dispatcher and its handlers reference. Declared before
   // `dispatcher_` so it is constructed first: the dispatcher binds a reference
   // to this handle during its own construction.
-  std::unique_ptr<Map<std::string, std::optional<std::string>>> store_;
+  std::unique_ptr<Store> store_;
 
   // Single command executor: the main thread owns the dispatcher and its store,
   // so command execution needs no locking.

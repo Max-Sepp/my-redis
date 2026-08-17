@@ -2,13 +2,11 @@
 #define MYREDIS_SERVER_HANDLER_REQUEST_DISPATCHER_H_
 
 #include <memory>
-#include <optional>
-#include <string>
 #include <vector>
 
 #include "resp_value/resp_value.h"
 #include "server/handler/handler.h"
-#include "store/map.h"
+#include "store/store.h"
 
 namespace myredis {
 
@@ -21,9 +19,7 @@ namespace myredis {
 // the store needs no locking. Not thread-safe by design.
 class RequestDispatcher {
  public:
-  explicit RequestDispatcher(
-      const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
-          store);
+  explicit RequestDispatcher(const std::unique_ptr<Store>& store);
 
   RequestDispatcher(const RequestDispatcher&) = delete;
   RequestDispatcher& operator=(const RequestDispatcher&) = delete;
@@ -34,7 +30,7 @@ class RequestDispatcher {
 
  private:
   // Declared before `handlers_` so it outlives the handlers that reference it.
-  const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store_;
+  const std::unique_ptr<Store>& store_;
   std::vector<std::unique_ptr<Handler>> handlers_;
 };
 

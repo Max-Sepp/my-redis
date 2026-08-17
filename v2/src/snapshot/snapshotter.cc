@@ -14,8 +14,6 @@
 #include <string>
 #include <string_view>
 
-#include "store/serialise.h"
-
 namespace myredis {
 namespace {
 
@@ -113,10 +111,8 @@ void DurableWrite(const std::filesystem::path& output_path,
 }
 }  // namespace
 
-void Snapshotter::Snapshot(
-    const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
-        store) {
-  const std::string store_json = SerialiseMapToJson(store);
+void Snapshotter::Snapshot(const std::unique_ptr<Store>& store) {
+  const std::string store_json = store->SerialiseToJson();
 
   auto timestamp = duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
@@ -128,9 +124,7 @@ void Snapshotter::Snapshot(
                store_json);
 }
 
-bool Snapshotter::Restore(
-    std::unique_ptr<Map<std::string, std::optional<std::string>>>& store)
-    const {
+bool Snapshotter::Restore(const std::unique_ptr<Store>& store) const {
   const std::optional<std::filesystem::path> path =
       LatestSnapshot(output_dir_, snapshot_file_prefix_);
   if (!path) return true;
@@ -144,7 +138,7 @@ bool Snapshotter::Restore(
   buffer << stream.rdbuf();
 
   try {
-    DeserialiseJsonToMap(store, buffer.str());
+    store->DeserialiseFromJson(buffer.str());
   } catch (const std::exception& e) {
     std::cerr << "Could not parse snapshot " << *path << ": " << e.what()
               << "\n";

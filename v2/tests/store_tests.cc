@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "store/hash.h"
-#include "store/linear_probing_hashmap.h"
-#include "store/linked_list_hashmap.h"
-#include "store/map.h"
-#include "store/standard_map.h"
+#include "store/map/hash.h"
+#include "store/map/linear_probing_hashmap.h"
+#include "store/map/linked_list_hashmap.h"
+#include "store/map/map.h"
+#include "store/map/standard_map.h"
 
 using myredis::kDefaultLoadFactor;
 using myredis::LinearProbingHashmap;

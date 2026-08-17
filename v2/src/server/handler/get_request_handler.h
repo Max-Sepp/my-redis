@@ -9,7 +9,7 @@
 #include "resp_value/resp_values.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
-#include "store/map.h"
+#include "store/store.h"
 
 namespace myredis {
 
@@ -17,9 +17,7 @@ namespace myredis {
 // is absent (or was stored with a null value).
 class GetRequestHandler final : public Handler {
  public:
-  explicit GetRequestHandler(
-      const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
-          store)
+  explicit GetRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
@@ -30,15 +28,16 @@ class GetRequestHandler final : public Handler {
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    const auto found = store_->LookUp(*command->args[0]);
+    const std::optional<std::string> found = store_->Get(*command->args[0]);
     if (!found.has_value()) return NullBulkString();
-    return BulkString(found->get());
+    return BulkString(*found);
   }
 
  private:
-  // Bound to the server's store handle, not the map itself, so the reference
-  // stays valid even if the underlying map is replaced (e.g. snapshot restore).
-  const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store_;
+  // Bound to the server's store handle, not the store itself, so the
+  // reference stays valid even if the store's contents are replaced (e.g.
+  // snapshot restore).
+  const std::unique_ptr<Store>& store_;
 };
 
 }  // namespace myredis
