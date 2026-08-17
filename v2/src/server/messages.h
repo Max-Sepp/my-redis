@@ -3,6 +3,7 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "resp_value/resp_value.h"
 
@@ -28,10 +29,14 @@ using InboxMsg = std::variant<AssignConnection, WriteResponse>;
 // Messages flowing IO thread -> main thread (carried on the IO thread's
 // `outbox_`).
 
-// A fully-parsed RESP request from a client; the main thread executes it.
-struct Command {
+// A batch of fully-parsed RESP requests from a single client, all drained from
+// one read. The main thread executes them in order and returns one coalesced
+// response. Batching amortises the cross-thread handoff: a pipelined burst of N
+// commands costs one outbox push + wakeup instead of N (and one PostResponse
+// back instead of N), which is what makes single-connection pipelining fast.
+struct CommandBatch {
   int fd = -1;
-  RespValue value;
+  std::vector<RespValue> values;
 };
 
 // The client closed (or errored) and the IO thread has already closed the fd;
@@ -40,7 +45,7 @@ struct Disconnect {
   int fd = -1;
 };
 
-using OutboxMsg = std::variant<Command, Disconnect>;
+using OutboxMsg = std::variant<CommandBatch, Disconnect>;
 
 }  // namespace myredis
 

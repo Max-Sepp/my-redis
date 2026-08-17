@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace myredis {
 
@@ -169,9 +170,13 @@ bool IoThread::ReadIntoParseQueue(Connection& conn) {
 }
 
 void IoThread::EmitParsedCommands(Connection& conn) {
+  // Coalesce every request drained from this read into a single outbox message
+  // so a pipelined batch costs one push + Notify, not one per command.
+  std::vector<RespValue> batch;
   while (std::optional<RespValue> request = conn.parse_queue.PopValue()) {
-    Emit(Command{conn.fd, std::move(*request)});
+    batch.push_back(std::move(*request));
   }
+  if (!batch.empty()) Emit(CommandBatch{conn.fd, std::move(batch)});
 }
 
 void IoThread::HandleWritable(int client_fd) {

@@ -69,7 +69,8 @@ class IoThread {
   // Reads until the socket would block. Returns false if the connection should
   // be closed (peer shutdown or fatal error), true if it is still alive.
   bool ReadIntoParseQueue(Connection& conn);
-  // Hands every fully-parsed request in the queue to the main thread.
+  // Hands every fully-parsed request drained from one read to the main thread
+  // as a single coalesced CommandBatch.
   void EmitParsedCommands(Connection& conn);
   // Writes as much of conn.out_buffer as the socket accepts, then (de)registers
   // EPOLLOUT for whatever remains.
