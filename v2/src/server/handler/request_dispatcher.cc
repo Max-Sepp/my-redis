@@ -6,7 +6,10 @@
 
 #include "resp_value/resp_values.h"
 #include "server/handler/del_request_handler.h"
+#include "server/handler/echo_request_handler.h"
 #include "server/handler/get_request_handler.h"
+#include "server/handler/hello_request_handler.h"
+#include "server/handler/ping_request_handler.h"
 #include "server/handler/set_request_handler.h"
 #include "server/handler/unknown_request_handler.h"
 
@@ -18,6 +21,9 @@ RequestDispatcher::RequestDispatcher(
   handlers_.push_back(std::make_unique<GetRequestHandler>(store_));
   handlers_.push_back(std::make_unique<SetRequestHandler>(store_));
   handlers_.push_back(std::make_unique<DelRequestHandler>(store_));
+  handlers_.push_back(std::make_unique<EchoRequestHandler>());
+  handlers_.push_back(std::make_unique<PingRequestHandler>());
+  handlers_.push_back(std::make_unique<HelloRequestHandler>());
   // Must remain last: matches anything the handlers above rejected.
   handlers_.push_back(std::make_unique<UnknownRequestHandler>());
 }

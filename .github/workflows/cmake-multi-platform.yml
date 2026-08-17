@@ -80,3 +80,12 @@ jobs:
           ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --build-config ${{ matrix.build_type }} --no-tests=error
+
+      - name: E2E handler tests
+        # Spins up the real my_redis_server binary and exercises each
+        # command handler over the wire (v2/tests/e2e/).
+        env:
+          SERVER_BIN: ${{ steps.strings.outputs.build-output-dir }}/my_redis_server
+          ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: bash v2/tests/e2e/run_all.sh
