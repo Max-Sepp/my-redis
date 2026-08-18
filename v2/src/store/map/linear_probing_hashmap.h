@@ -79,13 +79,13 @@ class LinearProbingHashmap final : public Map<K, V> {
     this->entries_ = std::vector<Entry>(initial_capacity);
   }
 
-  std::optional<std::reference_wrapper<const V>> LookUp(const K& key) override {
+  std::optional<std::reference_wrapper<V>> LookUp(const K& key) override {
     const int value_bucket_index = InternalFind(key);
 
     if (value_bucket_index != -1) {
       assert(entries_[value_bucket_index].value.has_value());
-      return std::optional<std::reference_wrapper<const V>>(
-          std::cref(entries_[value_bucket_index].value.value()));
+      return std::optional<std::reference_wrapper<V>>(
+          std::ref(entries_[value_bucket_index].value.value()));
     }
 
     return std::nullopt;
@@ -103,8 +103,8 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
   }
 
-  void ForEach(std::function<void(const K&, const V&)> action) override {
-    for (const Entry& entry : entries_) {
+  void ForEach(std::function<void(const K&, V&)> action) override {
+    for (Entry& entry : entries_) {
       if (entry.state != ELEMENT) continue;
 
       assert(entry.key.has_value() && entry.value.has_value());

@@ -2,6 +2,7 @@
 #define MYREDIS_STORE_SERIALISE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace myredis {
@@ -17,6 +18,11 @@ void SkipWhitespace(const std::string& data, size_t& pos);
 // '"'), unescaping it and advancing pos past the closing quote. The inverse
 // of AppendJsonString. Throws std::invalid_argument on malformed input.
 std::string ParseJsonString(const std::string& data, size_t& pos);
+
+// Parses the JSON integer literal at data[pos] (an optional leading '-'
+// followed by digits), advancing pos past it. Throws std::invalid_argument if
+// there is no valid integer at pos.
+int64_t ParseJsonInteger(const std::string& data, size_t& pos);
 
 }  // namespace myredis
 

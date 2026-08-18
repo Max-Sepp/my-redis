@@ -1,6 +1,7 @@
 #include "store/serialise.h"
 
 #include <array>
+#include <charconv>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -130,6 +131,18 @@ std::string ParseJsonString(const std::string& data, size_t& pos) {
     }
   }
   throw std::invalid_argument("unterminated string");
+}
+
+int64_t ParseJsonInteger(const std::string& data, size_t& pos) {
+  const char* begin = data.data() + pos;
+  const char* end = data.data() + data.size();
+  int64_t value = 0;
+  const auto [ptr, errc] = std::from_chars(begin, end, value);
+  if (errc != std::errc() || ptr == begin) {
+    throw std::invalid_argument("expected an integer");
+  }
+  pos += static_cast<size_t>(ptr - begin);
+  return value;
 }
 
 }  // namespace myredis

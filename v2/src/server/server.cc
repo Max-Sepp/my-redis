@@ -23,6 +23,8 @@
 #include <utility>
 #include <variant>
 
+#include "time/timenow.h"
+
 namespace myredis {
 
 namespace {
@@ -113,7 +115,7 @@ unsigned NumIoThreads() {
 }  // namespace
 
 Server::Server(ServerConfig config)
-    : store_(std::make_unique<Store>()),
+    : store_(std::make_unique<Store>(std::make_unique<TimeNow>())),
       dispatcher_(store_),
       snapshotter_(kSnapshotDir, kSnapshotPrefix),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),

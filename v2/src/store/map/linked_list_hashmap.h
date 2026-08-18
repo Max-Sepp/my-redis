@@ -95,15 +95,15 @@ class LinkedListHashmap final : public Map<K, V> {
     this->entries_.resize(kDefaultCapacity);
   }
 
-  std::optional<std::reference_wrapper<const V>> LookUp(const K& key) override {
+  std::optional<std::reference_wrapper<V>> LookUp(const K& key) override {
     if (entries_.empty()) return std::nullopt;
     Entry* curr_entry = entries_[hash_(key) % entries_.size()].get();
     while (curr_entry != nullptr && curr_entry->key != key) {
       curr_entry = curr_entry->next.get();
     }
     if (curr_entry != nullptr) {
-      return std::optional<std::reference_wrapper<const V>>(
-          std::cref(curr_entry->value));
+      return std::optional<std::reference_wrapper<V>>(
+          std::ref(curr_entry->value));
     }
     return std::nullopt;
   }
@@ -134,7 +134,7 @@ class LinkedListHashmap final : public Map<K, V> {
     }
   }
 
-  void ForEach(std::function<void(const K&, const V&)> action) override {
+  void ForEach(std::function<void(const K&, V&)> action) override {
     for (const auto& bucket : entries_) {
       Entry* curr = bucket.get();
       while (curr) {
