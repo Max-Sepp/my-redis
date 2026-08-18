@@ -1,5 +1,5 @@
-#ifndef MYREDIS_SERVER_HANDLER_SET_REQUEST_HANDLER_H_
-#define MYREDIS_SERVER_HANDLER_SET_REQUEST_HANDLER_H_
+#ifndef MYREDIS_SERVER_HANDLER_PERSIST_REQUEST_HANDLER_H_
+#define MYREDIS_SERVER_HANDLER_PERSIST_REQUEST_HANDLER_H_
 
 #include <memory>
 #include <optional>
@@ -13,22 +13,24 @@
 
 namespace myredis {
 
-// SET <key> <value>: stores value under key and replies +OK.
-class SetRequestHandler final : public Handler {
+// PERSIST <key>: removes key's TTL and replies :1, or :0 if the key doesn't
+// exist or has no TTL.
+class PersistRequestHandler final : public Handler {
  public:
-  explicit SetRequestHandler(const std::unique_ptr<Store>& store)
+  explicit PersistRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "SET" && command->args.size() == 2 &&
-           command->args[0].has_value() && !command->args[0]->empty();
+    return command && command->name == "PERSIST" &&
+           command->args.size() == 1 && command->args[0].has_value() &&
+           !command->args[0]->empty();
   }
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    store_->Set(*command->args[0], command->args[1]);
-    return SimpleString("OK");
+    const bool persisted = store_->Persist(*command->args[0]);
+    return Integer(persisted ? 1 : 0);
   }
 
  private:
@@ -40,4 +42,4 @@ class SetRequestHandler final : public Handler {
 
 }  // namespace myredis
 
-#endif  // MYREDIS_SERVER_HANDLER_SET_REQUEST_HANDLER_H_
+#endif  // MYREDIS_SERVER_HANDLER_PERSIST_REQUEST_HANDLER_H_

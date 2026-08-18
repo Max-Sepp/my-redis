@@ -9,16 +9,14 @@
 #include "resp_value/resp_values.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
-#include "store/map.h"
+#include "store/store.h"
 
 namespace myredis {
 
 // DEL <key>: removes key from the store and replies :1.
 class DelRequestHandler final : public Handler {
  public:
-  explicit DelRequestHandler(
-      const std::unique_ptr<Map<std::string, std::optional<std::string>>>&
-          store)
+  explicit DelRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
@@ -29,14 +27,15 @@ class DelRequestHandler final : public Handler {
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    store_->Remove(*command->args[0]);
+    store_->Del(*command->args[0]);
     return Integer(1);
   }
 
  private:
-  // Bound to the server's store handle, not the map itself, so the reference
-  // stays valid even if the underlying map is replaced (e.g. snapshot restore).
-  const std::unique_ptr<Map<std::string, std::optional<std::string>>>& store_;
+  // Bound to the server's store handle, not the store itself, so the
+  // reference stays valid even if the store's contents are replaced (e.g.
+  // snapshot restore).
+  const std::unique_ptr<Store>& store_;
 };
 
 }  // namespace myredis

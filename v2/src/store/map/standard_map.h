@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "store/map.h"
+#include "store/map/map.h"
 
 namespace myredis {
 
@@ -32,21 +32,20 @@ class StandardMap final : public Map<K, V> {
     return *this;
   }
 
-  std::optional<std::reference_wrapper<const V>> LookUp(const K& key) override {
+  std::optional<std::reference_wrapper<V>> LookUp(const K& key) override {
     const auto iter = data_.find(key);
     if (iter == data_.end()) return std::nullopt;
-    return std::optional<std::reference_wrapper<const V>>(
-        std::cref(iter->second));
+    return std::optional<std::reference_wrapper<V>>(std::ref(iter->second));
   }
 
   void Insert(K key, V value) override {
-    data_[std::move(key)] = std::move(value);
+    data_.insert_or_assign(std::move(key), std::move(value));
   }
 
   void Remove(const K& key) override { data_.erase(key); }
 
-  void ForEach(std::function<void(const K&, const V&)> action) override {
-    for (const auto& [key, value] : data_) {
+  void ForEach(std::function<void(const K&, V&)> action) override {
+    for (auto& [key, value] : data_) {
       action(key, value);
     }
   }

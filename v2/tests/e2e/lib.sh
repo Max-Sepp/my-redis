@@ -42,7 +42,7 @@ port_open() {
 }
 
 # start_server <port> — launches a fresh server listening on <port> with
-# snapshotting disabled, and waits for it to accept connections.
+# snapshotting disabled, and waits for it to actually service commands.
 start_server() {
   local port="$1"
   if [[ -z "${SERVER_BIN:-}" || ! -x "$SERVER_BIN" ]]; then
@@ -56,7 +56,7 @@ start_server() {
 
   local tries=100
   while (( tries-- > 0 )); do
-    port_open "$port" && return 0
+    port_open "$port" && break
     kill -0 "$SERVER_PID" 2>/dev/null || {
       echo "error: server exited before it started listening; log:" >&2
       cat "$SERVER_LOG" >&2
@@ -64,7 +64,22 @@ start_server() {
     }
     sleep 0.05
   done
-  echo "error: server never started listening on $port" >&2
+  (( tries > -1 )) || {
+    echo "error: server never started listening on $port" >&2
+    exit 1
+  }
+
+  # listen() runs in the server's constructor, well before Run() starts its
+  # epoll_wait loop (io-thread setup and a startup log line happen in
+  # between). port_open() above only proves the kernel completed a TCP
+  # handshake off the listen backlog, not that anything is reading yet —
+  # a command sent right after could sit unread and time out in
+  # send_command. Wait for a real round trip before handing off to the test.
+  tries=20
+  while (( tries-- > 0 )); do
+    [[ "$(send_command "$port" PING)" == "$(printf '+PONG\r\n')" ]] && return 0
+  done
+  echo "error: server never became responsive on $port" >&2
   exit 1
 }
 

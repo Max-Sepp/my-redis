@@ -47,6 +47,7 @@ set(SERVER_SOURCES
         src/server/server.cc
         src/snapshot/snapshotter.cc
         src/store/serialise.cc
+        src/store/store.cc
 )
 
 add_executable(my_redis_server src/server/main.cc ${SERVER_SOURCES})
@@ -91,10 +92,10 @@ if (BUILD_TESTS)
     target_include_directories(parser_tests PRIVATE src)
 
     # Store tests: the non-concurrent maps are header-only and depend on the
-    # store/hash.cc helper.
+    # store/map/hash.cc helper.
     add_executable(store_tests
             tests/store_tests.cc
-            src/store/hash.cc
+            src/store/map/hash.cc
     )
     target_link_libraries(store_tests PRIVATE GTest::gtest_main)
     target_include_directories(store_tests PRIVATE src)
