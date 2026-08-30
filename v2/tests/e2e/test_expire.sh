@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # e2e test for key expiry (EXPIRE/PEXPIRE/TTL/PTTL/PERSIST/EXPIREAT).
 #
-# NOTE: this is a spec written against real Redis semantics. EXPIRE/PEXPIRE/
-# TTL/PTTL are implemented; PERSIST and EXPIREAT are not (see ROADMAP.md's
-# "Key expiry" item), so those sections are expected to fail until they land.
+# NOTE: this is a spec written against real Redis semantics.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
