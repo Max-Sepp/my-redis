@@ -29,7 +29,11 @@ namespace myredis {
 
 namespace {
 constexpr std::size_t kMaxEvents = 64;
-constexpr int kConnectionBacklog = 16;
+// Matches Redis's own default (`tcp-backlog 511`). At the old value of 16, a
+// benchmark opening dozens of connections in a burst could overflow the
+// kernel's accept queue, forcing the client into a multi-second TCP SYN
+// retransmit backoff for the connections that missed the queue.
+constexpr int kConnectionBacklog = 511;
 constexpr long millisecondsInSecond = 1000;
 constexpr long nanosecondsInMillisecond = 1000000;
 

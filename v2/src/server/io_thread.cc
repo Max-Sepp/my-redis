@@ -1,6 +1,8 @@
 #include "io_thread.h"
 
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -119,6 +121,14 @@ void IoThread::HandleAssign(int client_fd) {
   // Client sockets must be non-blocking for the epoll loop.
   const int flags = fcntl(client_fd, F_GETFL, 0);
   fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+
+  // Without this, a request/response pair split across two small writes (the
+  // common case here: a client sends a request, we send a small reply) hits
+  // the classic Nagle/delayed-ACK interaction and can stall a connection for
+  // multiples of the ~40ms delayed-ACK timer. Real Redis sets this on every
+  // client socket for the same reason.
+  constexpr int enable = 1;
+  setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
 
   connections_.try_emplace(client_fd, client_fd);
 
