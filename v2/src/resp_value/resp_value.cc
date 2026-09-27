@@ -1,82 +1,119 @@
 #include "resp_value.h"
 
 #include <cassert>
+#include <charconv>
 #include <stdexcept>
+#include <system_error>
+#include <utility>
 
 namespace myredis {
 
+namespace {
+
+// Wraps a parsed alternative in a RespVariant, selecting the alternative
+// explicitly. Returning the optional directly is wrong for
+// std::optional<std::string>: it is itself RespBulkString, so the implicit
+// conversion would store the whole optional as a bulk string.
+template <typename T>
+std::optional<RespValue::RespVariant> ToVariant(std::optional<T> value) {
+  if (!value) {
+    return std::nullopt;
+  }
+  return RespValue::RespVariant(std::in_place_type<T>, std::move(*value));
+}
+
+// Parses str[begin, end) as a signed decimal, optionally prefixed with '+'.
+// Uses std::from_chars rather than std::stoll so that overflow is reported as
+// std::invalid_argument (a protocol error) instead of std::out_of_range, and
+// so that trailing garbage is rejected rather than silently ignored.
+long long ParseDecimal(const std::string& str, size_t begin, size_t end) {
+  if (begin < end && str[begin] == '+') {
+    ++begin;
+  }
+  const char* first = str.data() + begin;
+  const char* last = str.data() + end;
+  long long value = 0;
+  const auto [parse_end, error_code] = std::from_chars(first, last, value);
+  if (error_code != std::errc() || parse_end != last) {
+    throw std::invalid_argument("Invalid RESP number");
+  }
+  return value;
+}
+
+}  // namespace
+
 RespValue::RespValue(RespVariant variant) : value_(std::move(variant)) {}
 
-RespValue::RespVariant RespValue::ParseVariant(const std::string& str,
-                                               size_t& pos) {
+std::optional<RespValue::RespVariant> RespValue::ParseVariant(
+    const std::string& str, size_t& pos) {
   if (pos >= str.size()) {
-    throw std::out_of_range("Unexpected end of input while parsing RESP value");
+    return std::nullopt;  // End of input
   }
   switch (str[pos]) {
     case '+':
-      return ParseSimpleString(str, pos);
+      return ToVariant(ParseSimpleString(str, pos));
     case '-':
-      return ParseSimpleError(str, pos);
+      return ToVariant(ParseSimpleError(str, pos));
     case ':':
-      return ParseInteger(str, pos);
+      return ToVariant(ParseInteger(str, pos));
     case '$':
-      return ParseBulkString(str, pos);
+      return ToVariant(ParseBulkString(str, pos));
     case '*':
-      return ParseArray(str, pos);
+      return ToVariant(ParseArray(str, pos));
     default:
       throw std::invalid_argument("Invalid resp type prefix");
   }
 }
 
-RespValue::RespSimpleString RespValue::ParseSimpleString(const std::string& str,
-                                                         size_t& pos) {
+std::optional<RespValue::RespSimpleString> RespValue::ParseSimpleString(
+    const std::string& str, size_t& pos) {
   assert(str[pos] == '+');
   const size_t end_pos = str.find("\r\n", pos + 1);
   if (end_pos == std::string::npos) {
-    throw std::out_of_range("Missing CRLF for simple string");
+    return std::nullopt;  // Missing CLRF
   }
-  const std::string simple_string = str.substr(pos + 1, end_pos - pos - 1);
+  std::string simple_string = str.substr(pos + 1, end_pos - pos - 1);
   pos = end_pos + 2;  // skip \r\n
   return simple_string;
 }
 
-RespValue::RespSimpleError RespValue::ParseSimpleError(const std::string& str,
-                                                       size_t& pos) {
+std::optional<RespValue::RespSimpleError> RespValue::ParseSimpleError(
+    const std::string& str, size_t& pos) {
   assert(str[pos] == '-');
   const size_t end_pos = str.find("\r\n", pos + 1);
   if (end_pos == std::string::npos) {
-    throw std::out_of_range("Missing CRLF for simple error");
+    return std::nullopt;  // Missing CLRF
   }
   const std::string error_message = str.substr(pos + 1, end_pos - pos - 1);
   pos = end_pos + 2;  // skip \r\n
   return RespSimpleError{.message = error_message};
 }
 
-RespValue::RespInteger RespValue::ParseInteger(const std::string& str,
-                                               size_t& pos) {
+std::optional<RespValue::RespInteger> RespValue::ParseInteger(
+    const std::string& str, size_t& pos) {
   assert(str[pos] == ':');
   const size_t end_pos = str.find("\r\n", pos + 1);
   if (end_pos == std::string::npos) {
-    throw std::out_of_range("Missing CRLF for integer");
+    return std::nullopt;  // Missing CLRF
   }
-  const std::string integer_string = str.substr(pos + 1, end_pos - pos - 1);
-  const int64_t integer_value = stoll(integer_string);
+  const long long integer_value = ParseDecimal(str, pos + 1, end_pos);
   pos = end_pos + 2;  // skip \r\n
   return integer_value;
 }
 
-RespValue::RespBulkString RespValue::ParseBulkString(const std::string& str,
-                                                     size_t& pos) {
+std::optional<RespValue::RespBulkString> RespValue::ParseBulkString(
+    const std::string& str, size_t& pos) {
   assert(str[pos] == '$');
   const size_t end_of_length = str.find("\r\n", pos + 1);
   if (end_of_length == std::string::npos) {
-    throw std::out_of_range("Missing CRLF after bulk-string length");
+    return std::nullopt;  // Missing CRLF after bulk-string length
   }
-  const std::string length_string = str.substr(pos + 1, end_of_length - pos - 1);
-  const long long bulk_string_length = stoll(length_string);
+  const long long bulk_string_length =
+      ParseDecimal(str, pos + 1, end_of_length);
   pos = end_of_length + 2;
   if (bulk_string_length == -1) {
-    return std::nullopt;
+    // Null bulk string: engaged outer optional holding an empty inner one.
+    return std::make_optional<RespBulkString>(std::nullopt);
   }
   if (bulk_string_length <= -2) {
     throw std::invalid_argument(
@@ -85,12 +122,12 @@ RespValue::RespBulkString RespValue::ParseBulkString(const std::string& str,
   // Ensure there's enough data for the bulk string content plus trailing CRLF.
   if (bulk_string_length < 0 ||
       (pos + static_cast<size_t>(bulk_string_length) + 2) > str.size()) {
-    throw std::out_of_range("Bulk string payload truncated or missing CRLF");
+    return std::nullopt;  // Bulk string payload truncated or missing CRLF
   }
   // Verify terminating CRLF after payload.
   if (str[pos + bulk_string_length] != '\r' ||
       str[pos + bulk_string_length + 1] != '\n') {
-    throw std::out_of_range("Bulk string missing terminating CRLF");
+    return std::nullopt;  // Bulk string missing terminating CRLF
   }
   std::string bulk_string =
       str.substr(pos, static_cast<size_t>(bulk_string_length));
@@ -98,15 +135,14 @@ RespValue::RespBulkString RespValue::ParseBulkString(const std::string& str,
   return bulk_string;
 }
 
-RespValue::RespArray RespValue::ParseArray(const std::string& str,
-                                           size_t& pos) {
+std::optional<RespValue::RespArray> RespValue::ParseArray(
+    const std::string& str, size_t& pos) {
   assert(str[pos] == '*');
   const size_t end_of_length = str.find("\r\n", pos + 1);
   if (end_of_length == std::string::npos) {
-    throw std::out_of_range("Missing CRLF after array length");
+    return std::nullopt;  // Missing CRLF after array length
   }
-  const std::string length_string = str.substr(pos + 1, end_of_length - pos - 1);
-  const long long array_length = stoll(length_string);
+  const long long array_length = ParseDecimal(str, pos + 1, end_of_length);
   pos = end_of_length + 2;
   if (array_length < 0) {
     throw std::invalid_argument("Negative array length not allowed");
@@ -114,9 +150,14 @@ RespValue::RespArray RespValue::ParseArray(const std::string& str,
   std::vector<RespValue> output;
   for (long long i = 0; i < array_length; ++i) {
     if (pos >= str.size()) {
-      throw std::out_of_range("Array element missing/truncated");
+      return std::nullopt;  // Array element missing/truncated
     }
-    output.push_back(RespValue(ParseVariant(str, pos)));
+    std::optional<RespValue::RespVariant> array_element =
+        ParseVariant(str, pos);
+    if (!array_element) {
+      return std::nullopt;  // Incomplete array element
+    }
+    output.push_back(RespValue(*array_element));
   }
   return output;
 }
@@ -182,9 +223,14 @@ std::string RespValue::Show() const {
       value_);
 }
 
-std::pair<RespValue, size_t> RespValue::FromString(const std::string& str) {
+std::optional<std::pair<RespValue, size_t>> RespValue::FromString(
+    const std::string& str) {
   size_t pos = 0;
-  return std::make_pair(RespValue(ParseVariant(str, pos)), pos);
+  std::optional<RespValue::RespVariant> value = ParseVariant(str, pos);
+  if (!value) {
+    return std::nullopt;  // Incomplete resp value
+  }
+  return std::make_pair(RespValue(*value), pos);
 }
 
 RespValue RespValue::FromVariant(const RespVariant& variant) {

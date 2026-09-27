@@ -39,3 +39,6 @@ Checks: >
   -hicpp-braces-around-statements
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
+CheckOptions:
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: '^it$'

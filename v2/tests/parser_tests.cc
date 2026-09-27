@@ -12,7 +12,7 @@ class RespParsingTest : public ::testing::Test {
 
 // Simple String Tests
 TEST_F(RespParsingTest, ParseSimpleString) {
-  const RespValue resp = RespValue::FromString("+OK\r\n").first;
+  const RespValue resp = RespValue::FromString("+OK\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -20,7 +20,7 @@ TEST_F(RespParsingTest, ParseSimpleString) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleStringEmpty) {
-  const RespValue resp = RespValue::FromString("+\r\n").first;
+  const RespValue resp = RespValue::FromString("+\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -28,7 +28,7 @@ TEST_F(RespParsingTest, ParseSimpleStringEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleStringWithSpaces) {
-  const RespValue resp = RespValue::FromString("+Hello World\r\n").first;
+  const RespValue resp = RespValue::FromString("+Hello World\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleString>(value));
@@ -37,7 +37,7 @@ TEST_F(RespParsingTest, ParseSimpleStringWithSpaces) {
 
 // Simple Error Tests
 TEST_F(RespParsingTest, ParseSimpleError) {
-  const RespValue resp = RespValue::FromString("-Error message\r\n").first;
+  const RespValue resp = RespValue::FromString("-Error message\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -46,7 +46,7 @@ TEST_F(RespParsingTest, ParseSimpleError) {
 }
 
 TEST_F(RespParsingTest, ParseSimpleErrorEmpty) {
-  const RespValue resp = RespValue::FromString("-\r\n").first;
+  const RespValue resp = RespValue::FromString("-\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -55,7 +55,7 @@ TEST_F(RespParsingTest, ParseSimpleErrorEmpty) {
 
 TEST_F(RespParsingTest, ParseSimpleErrorComplex) {
   const RespValue resp =
-      RespValue::FromString("-ERR unknown command 'foobar'\r\n").first;
+      RespValue::FromString("-ERR unknown command 'foobar'\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespSimpleError>(value));
@@ -65,7 +65,7 @@ TEST_F(RespParsingTest, ParseSimpleErrorComplex) {
 
 // Integer Tests
 TEST_F(RespParsingTest, ParseIntegerPositive) {
-  const RespValue resp = RespValue::FromString(":1000\r\n").first;
+  const RespValue resp = RespValue::FromString(":1000\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -73,7 +73,7 @@ TEST_F(RespParsingTest, ParseIntegerPositive) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerNegative) {
-  const RespValue resp = RespValue::FromString(":-1000\r\n").first;
+  const RespValue resp = RespValue::FromString(":-1000\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -81,7 +81,7 @@ TEST_F(RespParsingTest, ParseIntegerNegative) {
 }
 
 TEST_F(RespParsingTest, ParseIntegerZero) {
-  const RespValue resp = RespValue::FromString(":0\r\n").first;
+  const RespValue resp = RespValue::FromString(":0\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -90,7 +90,7 @@ TEST_F(RespParsingTest, ParseIntegerZero) {
 
 TEST_F(RespParsingTest, ParseIntegerMaxValue) {
   const RespValue resp =
-      RespValue::FromString(":9223372036854775807\r\n").first;  // max int64_t
+      RespValue::FromString(":9223372036854775807\r\n")->first;  // max int64_t
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -99,7 +99,7 @@ TEST_F(RespParsingTest, ParseIntegerMaxValue) {
 
 TEST_F(RespParsingTest, ParseIntegerMinValue) {
   const RespValue resp =
-      RespValue::FromString(":-922337203685477580\r\n").first;  // min int64_t
+      RespValue::FromString(":-922337203685477580\r\n")->first;  // min int64_t
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
@@ -108,7 +108,7 @@ TEST_F(RespParsingTest, ParseIntegerMinValue) {
 
 // Bulk String Tests
 TEST_F(RespParsingTest, ParseBulkStringNormal) {
-  const RespValue resp = RespValue::FromString("$6\r\nfoobar\r\n").first;
+  const RespValue resp = RespValue::FromString("$6\r\nfoobar\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -118,7 +118,7 @@ TEST_F(RespParsingTest, ParseBulkStringNormal) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringEmpty) {
-  const RespValue resp = RespValue::FromString("$0\r\n\r\n").first;
+  const RespValue resp = RespValue::FromString("$0\r\n\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -128,7 +128,7 @@ TEST_F(RespParsingTest, ParseBulkStringEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringNull) {
-  const RespValue resp = RespValue::FromString("$-1\r\n").first;
+  const RespValue resp = RespValue::FromString("$-1\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -138,7 +138,7 @@ TEST_F(RespParsingTest, ParseBulkStringNull) {
 
 TEST_F(RespParsingTest, ParseBulkStringWithNewlines) {
   const RespValue resp =
-      RespValue::FromString("$12\r\nhello\r\nworld\r\n").first;
+      RespValue::FromString("$12\r\nhello\r\nworld\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespBulkString>(value));
@@ -149,7 +149,7 @@ TEST_F(RespParsingTest, ParseBulkStringWithNewlines) {
 
 // Array Tests
 TEST_F(RespParsingTest, ParseArrayEmpty) {
-  const RespValue resp = RespValue::FromString("*0\r\n").first;
+  const RespValue resp = RespValue::FromString("*0\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -159,7 +159,7 @@ TEST_F(RespParsingTest, ParseArrayEmpty) {
 
 TEST_F(RespParsingTest, ParseArrayTwoStrings) {
   const RespValue resp =
-      RespValue::FromString("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n").first;
+      RespValue::FromString("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -179,7 +179,7 @@ TEST_F(RespParsingTest, ParseArrayTwoStrings) {
 
 TEST_F(RespParsingTest, ParseArrayMixedTypes) {
   const RespValue resp =
-      RespValue::FromString("*3\r\n:1\r\n:2\r\n:3\r\n").first;
+      RespValue::FromString("*3\r\n:1\r\n:2\r\n:3\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -195,7 +195,7 @@ TEST_F(RespParsingTest, ParseArrayMixedTypes) {
 
 TEST_F(RespParsingTest, ParseArrayWithNullElements) {
   RespValue resp =
-      RespValue::FromString("*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n").first;
+      RespValue::FromString("*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n")->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -222,7 +222,7 @@ TEST_F(RespParsingTest, ParseNestedArray) {
   const RespValue resp =
       RespValue::FromString(
           "*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n")
-          .first;
+          ->first;
   const auto& value = resp.GetValue();
 
   ASSERT_TRUE(std::holds_alternative<RespValue::RespArray>(value));
@@ -248,7 +248,7 @@ TEST_F(RespParsingTest, ParseInvalidTypePrefix) {
 }
 
 TEST_F(RespParsingTest, ParseMissingCRLF) {
-  EXPECT_THROW(RespValue::FromString("+OK"), std::out_of_range);
+  EXPECT_FALSE(RespValue::FromString("+OK").has_value());
 }
 
 TEST_F(RespParsingTest, ParseInvalidInteger) {
@@ -256,9 +256,56 @@ TEST_F(RespParsingTest, ParseInvalidInteger) {
                std::invalid_argument);
 }
 
+TEST_F(RespParsingTest, ParseIntegerWithPlusSign) {
+  const RespValue resp = RespValue::FromString(":+42\r\n")->first;
+  const auto& value = resp.GetValue();
+
+  ASSERT_TRUE(std::holds_alternative<RespValue::RespInteger>(value));
+  EXPECT_EQ(std::get<RespValue::RespInteger>(value), 42);
+}
+
+// Numbers that overflow long long are protocol errors, not incomplete input.
+TEST_F(RespParsingTest, ParseIntegerOverflow) {
+  EXPECT_THROW(RespValue::FromString(":99999999999999999999\r\n"),
+               std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseBulkStringLengthOverflow) {
+  EXPECT_THROW(RespValue::FromString("$99999999999999999999\r\n"),
+               std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseArrayLengthOverflow) {
+  EXPECT_THROW(RespValue::FromString("*99999999999999999999\r\n"),
+               std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseIntegerTrailingGarbage) {
+  EXPECT_THROW(RespValue::FromString(":12abc\r\n"), std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseIntegerEmpty) {
+  EXPECT_THROW(RespValue::FromString(":\r\n"), std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseBulkStringNonNumericLength) {
+  EXPECT_THROW(RespValue::FromString("$abc\r\nfoo\r\n"),
+               std::invalid_argument);
+}
+
+TEST_F(RespParsingTest, ParseArrayNonNumericLength) {
+  EXPECT_THROW(RespValue::FromString("*x\r\n"), std::invalid_argument);
+}
+
+// The array header split before its CRLF is incomplete input, not an error.
+TEST_F(RespParsingTest, ParseArrayLengthMissingCRLF) {
+  EXPECT_FALSE(RespValue::FromString("*1").has_value());
+  EXPECT_FALSE(RespValue::FromString("*1\r").has_value());
+}
+
 TEST_F(RespParsingTest, ParseBulkStringLengthMismatch) {
-  EXPECT_THROW(RespValue::FromString("$6\r\nfoo\r\n"),
-               std::out_of_range);  // length says 6 but only 3 chars
+  // Length says 6 but only 3 chars.
+  EXPECT_FALSE(RespValue::FromString("$6\r\nfoo\r\n").has_value());
 }
 
 TEST_F(RespParsingTest, ParseNegativeBulkStringLengthNotMinusOne) {
@@ -266,8 +313,8 @@ TEST_F(RespParsingTest, ParseNegativeBulkStringLengthNotMinusOne) {
 }
 
 TEST_F(RespParsingTest, ParseArrayCountMismatch) {
-  EXPECT_THROW(RespValue::FromString("*2\r\n$3\r\nfoo\r\n"),
-               std::out_of_range);  // says 2 elements but only 1
+  // Says 2 elements but only 1.
+  EXPECT_FALSE(RespValue::FromString("*2\r\n$3\r\nfoo\r\n").has_value());
 }
 
 class RespSerializeTests : public ::testing::Test {
@@ -278,7 +325,7 @@ class RespSerializeTests : public ::testing::Test {
 
 // Simple String
 TEST(RespSerializeTests, SimpleString) {
-  const RespValue value = RespValue::FromString("+OK\r\n").first;
+  const RespValue value = RespValue::FromString("+OK\r\n")->first;
   EXPECT_EQ(value.Serialize(), "+OK\r\n");
 }
 
@@ -319,8 +366,9 @@ TEST(RespSerializeTests, ArrayEmpty) {
 // Array (with elements)
 TEST(RespSerializeTests, ArrayWithElements) {
   RespValue::RespArray arr;
-  arr.emplace_back(RespValue::FromString("+foo\r\n").first);
+  arr.emplace_back(RespValue::FromString("+foo\r\n")->first);
   arr.emplace_back(
+      // NOLINTNEXTLINE(readability-magic-numbers)
       RespValue::FromVariant(static_cast<RespValue::RespInteger>(123)));
   arr.emplace_back(RespValue::FromVariant(
       RespValue::RespBulkString(std::make_optional<std::string>("bar"))));

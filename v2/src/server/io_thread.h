@@ -24,7 +24,8 @@ namespace myredis {
 //     PostResponse), this IO thread is the sole consumer.
 //   - outbox_ is SPSC: this IO thread is the sole producer, the main thread is
 //     the sole consumer (via GetOutboxMsg).
-//   - command_event (owned by the server, shared by all IO threads) is signalled
+//   - command_event (owned by the server, shared by all IO threads) is
+//   signalled
 //     after pushing to outbox_ to wake the main thread.
 class IoThread {
  public:
@@ -68,7 +69,7 @@ class IoThread {
   void HandleWritable(int client_fd);
   // Reads until the socket would block. Returns false if the connection should
   // be closed (peer shutdown or fatal error), true if it is still alive.
-  bool ReadIntoParseQueue(Connection& conn);
+  static bool ReadIntoParseQueue(Connection& conn);
   // Hands every fully-parsed request drained from one read to the main thread
   // as a single coalesced CommandBatch.
   void EmitParsedCommands(Connection& conn);
