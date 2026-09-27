@@ -33,10 +33,10 @@ IoThread::IoThread(const EventFd& command_event)
     : epoll_fd_(epoll_create1(EPOLL_CLOEXEC)), command_event_(command_event) {
   // Register the inbox wakeup so the main thread can hand us work while we are
   // blocked in epoll_wait.
-  epoll_event ev{};
-  ev.events = EPOLLIN;
-  ev.data.fd = inbox_event_.Fd();
-  epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, inbox_event_.Fd(), &ev);
+  epoll_event event{};
+  event.events = EPOLLIN;
+  event.data.fd = inbox_event_.Fd();
+  epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, inbox_event_.Fd(), &event);
 }
 
 IoThread::~IoThread() {
@@ -69,7 +69,7 @@ void IoThread::PostAssign(int client_fd) {
 void IoThread::PostResponse(int client_fd, std::string bytes) {
   // Build the message once and copy on retry: a failed Push consumes its
   // argument, so retrying with a moved value would lose `bytes`.
-  InboxMsg msg = WriteResponse{client_fd, std::move(bytes)};
+  InboxMsg msg = WriteResponse{.fd = client_fd, .bytes = std::move(bytes)};
   while (!inbox_.Push(msg)) {
     std::this_thread::yield();
   }
@@ -86,21 +86,23 @@ void IoThread::Run() {
     }
 
     for (int i = 0; i < nfds; ++i) {
-      const epoll_event& ev = events[i];
-      const bool is_inbox = ev.data.fd == inbox_event_.Fd();
-      const bool is_error = (ev.events & (EPOLLERR | EPOLLHUP)) != 0;
+      const epoll_event& event = events[i];
+      const bool is_inbox = event.data.fd == inbox_event_.Fd();
+      const bool is_error = (event.events & (EPOLLERR | EPOLLHUP)) != 0;
 
       if (is_inbox) {
         inbox_event_.Drain();
         DrainInbox();
       } else if (is_error) {
-        CloseConnection(ev.data.fd, /*notify_main=*/true);
+        CloseConnection(event.data.fd, /*notify_main=*/true);
       } else {
-        if (ev.events & EPOLLIN) HandleReadable(ev.data.fd);
+        if (static_cast<bool>(event.events & EPOLLIN))
+          HandleReadable(event.data.fd);
         // HandleReadable may have closed the connection; only write if it is
         // still alive.
-        if ((ev.events & EPOLLOUT) && connections_.contains(ev.data.fd)) {
-          HandleWritable(ev.data.fd);
+        if (static_cast<bool>(event.events & EPOLLOUT) &&
+            connections_.contains(event.data.fd)) {
+          HandleWritable(event.data.fd);
         }
       }
     }
@@ -132,10 +134,10 @@ void IoThread::HandleAssign(int client_fd) {
 
   connections_.try_emplace(client_fd, client_fd);
 
-  epoll_event ev{};
-  ev.events = EPOLLIN;
-  ev.data.fd = client_fd;
-  epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &ev);
+  epoll_event event{};
+  event.events = EPOLLIN;
+  event.data.fd = client_fd;
+  epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &event);
 }
 
 void IoThread::HandleWriteResponse(const WriteResponse& response) {
@@ -167,16 +169,18 @@ void IoThread::HandleReadable(int client_fd) {
 
 bool IoThread::ReadIntoParseQueue(Connection& conn) {
   std::array<char, kReadBufSize> buf{};
-  ssize_t n = recv(conn.fd, buf.data(), buf.size(), MSG_DONTWAIT);
-  while (n > 0) {
+  ssize_t num_bytes_consumed =
+      recv(conn.fd, buf.data(), buf.size(), MSG_DONTWAIT);
+  while (num_bytes_consumed > 0) {
     conn.parse_queue.PushString(
-        std::string(buf.data(), static_cast<std::size_t>(n)));
-    n = recv(conn.fd, buf.data(), buf.size(), MSG_DONTWAIT);
+        std::string(buf.data(), static_cast<std::size_t>(num_bytes_consumed)));
+    num_bytes_consumed = recv(conn.fd, buf.data(), buf.size(), MSG_DONTWAIT);
   }
 
-  if (n == 0) return false;  // peer performed an orderly shutdown
+  if (num_bytes_consumed == 0)
+    return false;  // peer performed an orderly shutdown
   // n < 0: drained (still alive) for would-block/interrupt, otherwise fatal.
-  return WouldBlockOrInterrupted(n);
+  return WouldBlockOrInterrupted(num_bytes_consumed);
 }
 
 void IoThread::EmitParsedCommands(Connection& conn) {
@@ -186,7 +190,8 @@ void IoThread::EmitParsedCommands(Connection& conn) {
   while (std::optional<RespValue> request = conn.parse_queue.PopValue()) {
     batch.push_back(std::move(*request));
   }
-  if (!batch.empty()) Emit(CommandBatch{conn.fd, std::move(batch)});
+  if (!batch.empty())
+    Emit(CommandBatch{.fd = conn.fd, .values = std::move(batch)});
 }
 
 void IoThread::HandleWritable(int client_fd) {
@@ -203,12 +208,12 @@ void IoThread::FlushOutBuffer(Connection& conn) {
   std::size_t sent = 0;
   bool would_block = false;
   while (sent < conn.out_buffer.size() && !would_block) {
-    const ssize_t n = send(conn.fd, conn.out_buffer.data() + sent,
-                           conn.out_buffer.size() - sent,
-                           MSG_NOSIGNAL | MSG_DONTWAIT);
-    if (n > 0) {
-      sent += static_cast<std::size_t>(n);
-    } else if (WouldBlockOrInterrupted(n)) {
+    const ssize_t num_bytes_sent =
+        send(conn.fd, conn.out_buffer.data() + sent,
+             conn.out_buffer.size() - sent, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (num_bytes_sent > 0) {
+      sent += static_cast<std::size_t>(num_bytes_sent);
+    } else if (WouldBlockOrInterrupted(num_bytes_sent)) {
       would_block = true;
     } else {
       conn.out_buffer.clear();
@@ -245,10 +250,10 @@ void IoThread::Emit(const OutboxMsg& msg) {
 }
 
 void IoThread::UpdateEpoll(int client_fd, bool writable) const {
-  epoll_event ev{};
-  ev.events = EPOLLIN | (writable ? EPOLLOUT : 0);
-  ev.data.fd = client_fd;
-  epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, client_fd, &ev);
+  epoll_event event{};
+  event.events = EPOLLIN | (writable ? EPOLLOUT : 0);
+  event.data.fd = client_fd;
+  epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, client_fd, &event);
 }
 
 }  // namespace myredis

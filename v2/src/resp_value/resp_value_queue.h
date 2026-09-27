@@ -22,9 +22,9 @@ class RespValueQueue {
    * - Repeatedly attempts to parse RespValue objects from the front of the
    *   buffer. Each successfully parsed value is moved into the internal queue_
    *   and the consumed prefix is removed from the buffer.
-   * - If parsing encounters incomplete input, RespValue::FromString throws
-   *   std::out_of_range; this is caught and the (partial) data is left in the
-   *   buffer waiting for more input.
+   * - If parsing encounters incomplete input, RespValue::FromString returns
+   *   std::nullopt and the (partial) data is left in the buffer waiting for
+   *   more input.
    * - If parsing fails with std::invalid_argument (malformed framing), that
    *   exception is not caught here and propagates to the caller.
    */
