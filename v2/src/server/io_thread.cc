@@ -9,7 +9,6 @@
 
 #include <array>
 #include <cerrno>
-#include <stdexcept>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -146,50 +145,38 @@ void IoThread::HandleWriteResponse(const WriteResponse& response) {
   const auto it = connections_.find(response.fd);
   if (it == connections_.end()) return;  // client already disconnected
   Connection& conn = it->second;
-  conn.out_buffer.append(response.bytes);
-  FlushOutBuffer(conn);
+  FinishWrite(response.fd, conn, conn.Send(response.bytes));
 }
 
 void IoThread::HandleReadable(int client_fd) {
   const auto it = connections_.find(client_fd);
   if (it == connections_.end()) return;
-  Connection& conn = it->second;
 
-  const bool alive = conn.ReadIntoParseQueue();
+  Connection::ReadResult result = it->second.Read();
 
-  // Parsing (and any std::invalid_argument for malformed RESP framing) happens
-  // in PopValue, inside EmitParsedCommands.
-  bool well_formed = true;
-  try {
-    EmitParsedCommands(conn);
-  } catch (const std::invalid_argument&) {
-    well_formed = false;  // drop the connection on a protocol error
-  }
-
-  if (!alive || !well_formed) CloseConnection(client_fd, /*notify_main=*/true);
-}
-
-void IoThread::EmitParsedCommands(Connection& conn) {
   // Coalesce every request drained from this read into a single outbox message
   // so a pipelined batch costs one push + Notify, not one per command.
-  std::vector<RespValue> batch = conn.TakeParsedRequests();
-  if (!batch.empty())
-    Emit(CommandBatch{.fd = conn.fd, .values = std::move(batch)});
+  if (!result.requests.empty())
+    Emit(CommandBatch{.fd = client_fd, .values = std::move(result.requests)});
+
+  if (!result.keep_open) CloseConnection(client_fd, /*notify_main=*/true);
 }
 
 void IoThread::HandleWritable(int client_fd) {
   const auto it = connections_.find(client_fd);
   if (it == connections_.end()) return;
-  FlushOutBuffer(it->second);
+  Connection& conn = it->second;
+  FinishWrite(client_fd, conn, conn.Flush());
 }
 
-void IoThread::FlushOutBuffer(Connection& conn) {
-  if (!conn.WriteOutBuffer()) {
-    CloseConnection(conn.fd, /*notify_main=*/true);  // fatal write error
+void IoThread::FinishWrite(int client_fd, const Connection& conn,
+                           const bool write_ok) {
+  if (!write_ok) {
+    CloseConnection(client_fd, /*notify_main=*/true);  // fatal write error
     return;
   }
   // Subscribe to EPOLLOUT only while bytes remain to be flushed.
-  UpdateEpoll(conn.fd, /*writable=*/!conn.out_buffer.empty());
+  UpdateEpoll(client_fd, /*writable=*/conn.HasPendingWrites());
 }
 
 void IoThread::CloseConnection(int client_fd, bool notify_main) {
@@ -212,7 +199,7 @@ void IoThread::SetReadingPaused(const bool paused) {
   // EPOLLERR / EPOLLHUP are always reported, so a paused client that
   // disconnects is still noticed.
   for (const auto& [client_fd, conn] : connections_) {
-    UpdateEpoll(client_fd, /*writable=*/!conn.out_buffer.empty());
+    UpdateEpoll(client_fd, /*writable=*/conn.HasPendingWrites());
   }
 }
 

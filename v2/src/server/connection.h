@@ -2,6 +2,7 @@
 #define MYREDIS_SERVER_CONNECTION_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "resp_value/resp_value.h"
@@ -15,31 +16,43 @@ namespace myredis {
 //
 // The socket IO methods only touch the Connection; what to do with the result
 // (closing the connection, handing requests to the main thread, epoll
-// interest) is up to the caller.
-struct Connection {
-  explicit Connection(int client_fd) : fd(client_fd) {}
+// interest) is up to the caller. The caller also owns the fd's lifetime.
+class Connection {
+ public:
+  struct ReadResult {
+    // Every request fully parsed from this read, oldest first. Empty if the
+    // read hit malformed RESP framing.
+    std::vector<RespValue> requests;
+    // False if the connection should be closed: peer shutdown, a fatal socket
+    // error, or malformed RESP framing.
+    bool keep_open;
+  };
 
-  // Reads until the socket would block, appending the bytes to parse_queue.
-  // Returns false if the connection should be closed (peer shutdown or fatal
-  // error), true if it is still alive.
-  bool ReadIntoParseQueue();
+  explicit Connection(int client_fd) : fd_(client_fd) {}
 
-  // Pops every fully parsed request out of parse_queue, oldest first. Throws
-  // std::invalid_argument on malformed RESP framing.
-  std::vector<RespValue> TakeParsedRequests();
+  // Reads until the socket would block and returns the requests parsed so far.
+  ReadResult Read();
 
-  // Writes as much of out_buffer as the socket accepts and drops the bytes
-  // that were sent; whatever remains should be retried on EPOLLOUT. Returns
-  // false on a fatal write error, after which the connection should be
-  // closed.
-  bool WriteOutBuffer();
+  // Queues bytes for writing and immediately flushes as much as the socket
+  // accepts. Returns false on a fatal write error, after which the connection
+  // should be closed.
+  bool Send(std::string_view bytes);
 
-  int fd;
+  // Writes as much of the pending bytes as the socket accepts; whatever
+  // remains should be retried on EPOLLOUT. Returns false on a fatal write
+  // error, after which the connection should be closed.
+  bool Flush();
+
+  // True while bytes remain that the socket has not yet accepted.
+  [[nodiscard]] bool HasPendingWrites() const { return !out_buffer_.empty(); }
+
+ private:
+  int fd_;
   // Incrementally accumulates received bytes and yields parsed RESP values.
-  RespValueQueue parse_queue;
-  // Bytes queued for writing that have not yet been accepted by the socket
-  // (i.e. SendAll returned would-block). Drained on EPOLLOUT.
-  std::string out_buffer;
+  RespValueQueue parse_queue_;
+  // Bytes queued for writing that have not yet been accepted by the socket.
+  // Drained on EPOLLOUT.
+  std::string out_buffer_;
 };
 
 }  // namespace myredis

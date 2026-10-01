@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 
 namespace myredis {
@@ -22,39 +23,48 @@ bool WouldBlockOrInterrupted(const ssize_t result) {
 }
 }  // namespace
 
-bool Connection::ReadIntoParseQueue() {
+Connection::ReadResult Connection::Read() {
   std::array<char, kReadBufSize> buf{};
-  ssize_t num_bytes_consumed = recv(fd, buf.data(), buf.size(), MSG_DONTWAIT);
+  ssize_t num_bytes_consumed = recv(fd_, buf.data(), buf.size(), MSG_DONTWAIT);
   while (num_bytes_consumed > 0) {
-    parse_queue.PushString(
+    parse_queue_.PushString(
         std::string(buf.data(), static_cast<std::size_t>(num_bytes_consumed)));
-    num_bytes_consumed = recv(fd, buf.data(), buf.size(), MSG_DONTWAIT);
+    num_bytes_consumed = recv(fd_, buf.data(), buf.size(), MSG_DONTWAIT);
   }
 
-  if (num_bytes_consumed == 0)
-    return false;  // peer performed an orderly shutdown
-  // n < 0: drained (still alive) for would-block/interrupt, otherwise fatal.
-  return WouldBlockOrInterrupted(num_bytes_consumed);
-}
+  // A zero return is an orderly peer shutdown; a negative one is fine only for
+  // would-block/interrupt, otherwise it is a fatal error.
+  ReadResult result{.requests = {},
+                    .keep_open = num_bytes_consumed != 0 &&
+                                 WouldBlockOrInterrupted(num_bytes_consumed)};
 
-std::vector<RespValue> Connection::TakeParsedRequests() {
-  std::vector<RespValue> requests;
-  while (std::optional<RespValue> request = parse_queue.PopValue()) {
-    requests.push_back(std::move(*request));
+  try {
+    while (std::optional<RespValue> request = parse_queue_.PopValue()) {
+      result.requests.push_back(std::move(*request));
+    }
+  } catch (const std::invalid_argument&) {
+    // Malformed RESP framing: drop the connection.
+    result.requests.clear();
+    result.keep_open = false;
   }
-  return requests;
+  return result;
 }
 
-bool Connection::WriteOutBuffer() {
-  // Write as much of out_buffer as the socket will currently accept, tracking
+bool Connection::Send(const std::string_view bytes) {
+  out_buffer_.append(bytes);
+  return Flush();
+}
+
+bool Connection::Flush() {
+  // Write as much of out_buffer_ as the socket will currently accept, tracking
   // exactly how many bytes were consumed so the remainder can be retried on
   // EPOLLOUT. (SendAll is unsuitable here: it cannot report partial progress
   // when a non-blocking send would block.)
   std::size_t sent = 0;
   bool would_block = false;
-  while (sent < out_buffer.size() && !would_block) {
+  while (sent < out_buffer_.size() && !would_block) {
     const ssize_t num_bytes_sent =
-        send(fd, out_buffer.data() + sent, out_buffer.size() - sent,
+        send(fd_, out_buffer_.data() + sent, out_buffer_.size() - sent,
              MSG_NOSIGNAL | MSG_DONTWAIT);
     if (num_bytes_sent > 0) {
       sent += static_cast<std::size_t>(num_bytes_sent);
@@ -65,7 +75,7 @@ bool Connection::WriteOutBuffer() {
     }
   }
 
-  out_buffer.erase(0, sent);
+  out_buffer_.erase(0, sent);
   return true;
 }
 

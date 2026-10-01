@@ -77,12 +77,9 @@ class IoThread {
   // Client socket handling.
   void HandleReadable(int client_fd);
   void HandleWritable(int client_fd);
-  // Hands every fully-parsed request drained from one read to the main thread
-  // as a single coalesced CommandBatch.
-  void EmitParsedCommands(Connection& conn);
-  // Writes as much of conn.out_buffer as the socket accepts, then (de)registers
-  // EPOLLOUT for whatever remains.
-  void FlushOutBuffer(Connection& conn);
+  // After a Send/Flush on conn: closes the connection on a fatal write error,
+  // otherwise (de)registers EPOLLOUT depending on whether bytes remain.
+  void FinishWrite(int client_fd, const Connection& conn, bool write_ok);
 
   void CloseConnection(int client_fd, bool notify_main);
   // Push to outbox_ and pause reading while it has a backlog. Never blocks.
