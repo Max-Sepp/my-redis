@@ -2,11 +2,13 @@
 #define MYREDIS_SERVER_IO_THREAD_H_
 
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
 
+#include "concurrent/backpressure_queue.h"
 #include "concurrent/event_fd.h"
 #include "concurrent/single_consumer_producer_queue.h"
 #include "server/connection.h"
@@ -27,9 +29,16 @@ namespace myredis {
 //   - command_event (owned by the server, shared by all IO threads) is
 //   signalled
 //     after pushing to outbox_ to wake the main thread.
+//
+// Backpressure: this thread never blocks on a full outbox_. While outbox_ has
+// a backlog the thread stops reading from its sockets, so a slow main thread
+// pushes back on clients through TCP instead of stalling this thread. When the
+// main thread finds outbox_ empty in GetOutboxMsg, it signals
+// outbox_.SpaceAvailableEvent() to wake this thread to hand over the rest and
+// start reading again.
 class IoThread {
  public:
-  static constexpr std::size_t kQueueCapacity = 1024;
+  static constexpr std::size_t kQueueCapacity = 2;
 
   // `command_event` is the main thread's wakeup; it is signalled whenever this
   // thread enqueues an OutboxMsg. It must outlive this IoThread.
@@ -53,7 +62,8 @@ class IoThread {
 
   // Pop the next IO -> main message, or std::nullopt if none are pending. The
   // main thread (the sole consumer) calls this in a loop when command_event
-  // fires.
+  // fires. Finding outbox_ empty also wakes this thread if it has messages
+  // waiting for room in outbox_.
   std::optional<OutboxMsg> GetOutboxMsg() { return outbox_.Pop(); }
 
  private:
@@ -67,9 +77,6 @@ class IoThread {
   // Client socket handling.
   void HandleReadable(int client_fd);
   void HandleWritable(int client_fd);
-  // Reads until the socket would block. Returns false if the connection should
-  // be closed (peer shutdown or fatal error), true if it is still alive.
-  static bool ReadIntoParseQueue(Connection& conn);
   // Hands every fully-parsed request drained from one read to the main thread
   // as a single coalesced CommandBatch.
   void EmitParsedCommands(Connection& conn);
@@ -78,17 +85,25 @@ class IoThread {
   void FlushOutBuffer(Connection& conn);
 
   void CloseConnection(int client_fd, bool notify_main);
-  // Push to outbox_ and wake the main thread (spin-retries if outbox_ is full).
-  void Emit(const OutboxMsg& msg);
-  // Set epoll interest for a client fd: EPOLLIN, plus EPOLLOUT iff `writable`.
+  // Push to outbox_ and pause reading while it has a backlog. Never blocks.
+  void Emit(OutboxMsg msg);
+  // Stop or resume reading from every client socket by dropping or restoring
+  // EPOLLIN.
+  void SetReadingPaused(bool paused);
+
+  // The epoll mask for a client fd: EPOLLIN unless reading is paused, plus
+  // EPOLLOUT iff `writable`.
+  std::uint32_t InterestMask(bool writable) const;
+  // Apply InterestMask(writable) to an already registered client fd.
   void UpdateEpoll(int client_fd, bool writable) const;
 
   int epoll_fd_ = -1;
-  EventFd inbox_event_;           // main -> this thread wakeup
-  const EventFd& command_event_;  // this thread -> main wakeup (server-owned)
+  EventFd inbox_event_;  // main -> this thread wakeup
 
   SingleConsumerProducerQueue<InboxMsg, kQueueCapacity> inbox_;
-  SingleConsumerProducerQueue<OutboxMsg, kQueueCapacity> outbox_;
+  BackpressureQueue<OutboxMsg, kQueueCapacity> outbox_;
+  // True while client sockets are registered without EPOLLIN.
+  bool reading_paused_ = false;
 
   std::unordered_map<int, Connection> connections_;
   std::thread thread_;
