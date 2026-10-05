@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <concepts>
+#include <new>
 #include <optional>
 #include <utility>
 
@@ -11,14 +12,14 @@ namespace myredis {
 template <typename T, std::size_t N>
 class SingleConsumerProducerQueue {
   std::array<std::optional<T>, N + 1> buffer_{};
-  std::atomic<size_t> head_{0};
-  std::atomic<size_t> tail_{0};
+  alignas(
+      std::hardware_destructive_interference_size) std::atomic<size_t> head_{0};
+  alignas(
+      std::hardware_destructive_interference_size) std::atomic<size_t> tail_{0};
 
-  static size_t increment(const size_t index) {
-    return (index + 1) % (N+1);
-  }
+  static size_t increment(const size_t index) { return (index + 1) % (N + 1); }
 
-public:
+ public:
   // `element` is only moved from (or copied) when the push succeeds, so a
   // caller can retry a failed Push with the same object.
   template <typename U>
@@ -35,7 +36,7 @@ public:
   }
 
   [[nodiscard]] std::optional<T> Pop() {
-    const size_t head = head_.load(std::memory_order_relaxed); // we own head_
+    const size_t head = head_.load(std::memory_order_relaxed);  // we own head_
     if (head == tail_.load(std::memory_order_acquire)) {
       return std::nullopt;
     }
@@ -46,6 +47,6 @@ public:
     return element;
   }
 };
-} // namespace myredis
+}  // namespace myredis
 
 #endif  // MY_REDIS_SINGLE_CONSUMER_PRODUCER_QUEUE_H
