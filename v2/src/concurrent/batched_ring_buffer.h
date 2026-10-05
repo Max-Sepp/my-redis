@@ -4,12 +4,16 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
+#include <bit>
+#include <cassert>
 #include <cstddef>
 #include <cstdio>
 #include <new>
 #include <numeric>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -116,12 +120,47 @@ class BatchRingBuffer {
   }
 
   // Producer only. Returns false if the buffer is full.
-  [[nodiscard]] bool Push(T element) {
+  [[nodiscard]] bool Push(const T& element) {
+    if (current_reserving_) {
+      throw std::logic_error("Cannot push whilst a reservation is open");
+    }
+
     const std::size_t tail = tail_.load(std::memory_order_relaxed);
     if (tail - head_.load(std::memory_order_acquire) == M) return false;
     new (data_ + (tail % slot_count_)) T(element);
     tail_.store(tail + 1, std::memory_order_release);
     return true;
+  }
+
+  // Producer only. Returns up to `max` contiguous free slots to write into
+  // directly; the consumer sees none of them until Commit. Empty if full.
+  [[nodiscard]] std::span<T> Reserve(std::size_t max) {
+    if (current_reserving_) {
+      throw std::logic_error(
+          "Cannot reserve whilst another reservation has not been committed");
+    }
+
+    const std::size_t tail = tail_.load(std::memory_order_relaxed);
+    const std::size_t free_slots =
+        M - (tail - head_.load(std::memory_order_acquire));
+    reserved_ = std::min(max, free_slots);
+    current_reserving_ = true;
+    return {data_ + (tail % slot_count_), reserved_};
+  }
+
+  // Producer only. Publishes the first `count` slots from Reserve and closes
+  // the reservation.
+  void Commit(std::size_t count) {
+    if (!current_reserving_) {
+      throw std::logic_error("Cannot commit without an open reservation");
+    }
+    if (count > reserved_) {
+      throw std::out_of_range("Cannot commit more than was reserved");
+    }
+
+    const std::size_t tail = tail_.load(std::memory_order_relaxed);
+    tail_.store(tail + count, std::memory_order_release);
+    current_reserving_ = false;
   }
 
   // Consumer only. Returns std::nullopt if fewer than `count` are buffered.
@@ -149,27 +188,32 @@ class BatchRingBuffer {
   }
 
  private:
-  // Each mapping must cover a whole number of pages and of elements. If
-  // sizeof(T) * M is not such a multiple, it is rounded up and the spare
-  // space becomes extra slots (e.g. 1000 ints round up to one 4096-byte page,
-  // giving 1024 slots). Indices wrap modulo the slot count rather than M, but
+  // Rounds M up so each mapping is a whole number of pages and of elements, and
+  // the slot count is a power of two so indices survive head_/tail_ overflow.
   // Push still stops at M elements.
   static std::size_t SlotCount() {
     const auto page_size = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+    assert(std::has_single_bit(page_size));
     const std::size_t granule = std::lcm(page_size, sizeof(T));
     const std::size_t bytes = (sizeof(T) * M + granule - 1) / granule * granule;
-    return bytes / sizeof(T);
+    return std::bit_ceil(bytes / sizeof(T));
   }
 
-  const std::size_t slot_count_;
-  int fd_;
-  T* data_;
+  // One cache line for consumer state and one for producer state. The
+  // read-only fields share the consumer's line, which the producer already
+  // reads for head_.
   // Total elements ever popped and pushed; never wrapped.
   alignas(std::hardware_destructive_interference_size)
       std::atomic<std::size_t> head_{0};
+  bool current_popping_{false};
+  int fd_;
+  T* data_;
+  const std::size_t slot_count_;
+
   alignas(std::hardware_destructive_interference_size)
       std::atomic<std::size_t> tail_{0};
-  bool current_popping_{false};
+  std::size_t reserved_{0};
+  bool current_reserving_{false};
 };
 
 }  // namespace myredis
