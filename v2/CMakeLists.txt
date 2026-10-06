@@ -101,7 +101,14 @@ if (BUILD_TESTS)
     target_link_libraries(store_tests PRIVATE GTest::gtest_main)
     target_include_directories(store_tests PRIVATE src)
 
+    add_executable(batched_ring_buffer_tests
+            tests/batched_ring_buffer_tests.cc
+    )
+    target_link_libraries(batched_ring_buffer_tests PRIVATE GTest::gtest_main)
+    target_include_directories(batched_ring_buffer_tests PRIVATE src)
+
     include(GoogleTest)
     gtest_discover_tests(parser_tests)
     gtest_discover_tests(store_tests)
+    gtest_discover_tests(batched_ring_buffer_tests)
 endif ()
