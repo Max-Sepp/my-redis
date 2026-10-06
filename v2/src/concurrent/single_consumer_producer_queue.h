@@ -3,19 +3,18 @@
 #include <array>
 #include <atomic>
 #include <concepts>
-#include <new>
 #include <optional>
 #include <utility>
+
+#include "concurrent/cache_line.h"
 
 namespace myredis {
 
 template <typename T, std::size_t N>
 class SingleConsumerProducerQueue {
   std::array<std::optional<T>, N + 1> buffer_{};
-  alignas(
-      std::hardware_destructive_interference_size) std::atomic<size_t> head_{0};
-  alignas(
-      std::hardware_destructive_interference_size) std::atomic<size_t> tail_{0};
+  alignas(kCacheLineSize) std::atomic<size_t> head_{0};
+  alignas(kCacheLineSize) std::atomic<size_t> tail_{0};
 
   static size_t increment(const size_t index) { return (index + 1) % (N + 1); }
 

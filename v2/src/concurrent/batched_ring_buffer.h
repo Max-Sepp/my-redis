@@ -10,13 +10,14 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
-#include <new>
 #include <numeric>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+
+#include "concurrent/cache_line.h"
 
 namespace myredis {
 
@@ -203,14 +204,14 @@ class BatchRingBuffer {
   // read-only fields share the consumer's line, which the producer already
   // reads for head_.
   // Total elements ever popped and pushed; never wrapped.
-  alignas(std::hardware_destructive_interference_size)
+  alignas(kCacheLineSize)
       std::atomic<std::size_t> head_{0};
   bool current_popping_{false};
   int fd_;
   T* data_;
   const std::size_t slot_count_;
 
-  alignas(std::hardware_destructive_interference_size)
+  alignas(kCacheLineSize)
       std::atomic<std::size_t> tail_{0};
   std::size_t reserved_{0};
   bool current_reserving_{false};
