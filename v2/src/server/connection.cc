@@ -51,32 +51,47 @@ Connection::ReadResult Connection::Read() {
 }
 
 bool Connection::Send(const std::string_view bytes) {
-  out_buffer_.append(bytes);
-  return Flush();
+  // Queued bytes must reach the socket first to keep responses in order.
+  if (HasPendingWrites()) {
+    out_buffer_.append(bytes);
+    return Flush();
+  }
+  return SendAndBufferRemainder(bytes);
 }
 
 bool Connection::Flush() {
-  // Write as much of out_buffer_ as the socket will currently accept, tracking
-  // exactly how many bytes were consumed so the remainder can be retried on
-  // EPOLLOUT. (SendAll is unsuitable here: it cannot report partial progress
-  // when a non-blocking send would block.)
+  const std::optional<std::size_t> sent = SendUntilWouldBlock(out_buffer_);
+  if (!sent) return false;
+  out_buffer_.erase(0, *sent);
+  return true;
+}
+
+bool Connection::SendAndBufferRemainder(const std::string_view bytes) {
+  const std::optional<std::size_t> sent = SendUntilWouldBlock(bytes);
+  if (!sent) return false;
+  out_buffer_.append(bytes.substr(*sent));
+  return true;
+}
+
+std::optional<std::size_t> Connection::SendUntilWouldBlock(
+    const std::string_view bytes) const {
+  // SendAll is unsuitable here: it cannot report partial progress when a
+  // non-blocking send would block.
   std::size_t sent = 0;
   bool would_block = false;
-  while (sent < out_buffer_.size() && !would_block) {
+  while (sent < bytes.size() && !would_block) {
     const ssize_t num_bytes_sent =
-        send(fd_, out_buffer_.data() + sent, out_buffer_.size() - sent,
+        send(fd_, bytes.data() + sent, bytes.size() - sent,
              MSG_NOSIGNAL | MSG_DONTWAIT);
     if (num_bytes_sent > 0) {
       sent += static_cast<std::size_t>(num_bytes_sent);
     } else if (WouldBlockOrInterrupted(num_bytes_sent)) {
       would_block = true;
     } else {
-      return false;  // fatal write error
+      return std::nullopt;  // fatal write error
     }
   }
-
-  out_buffer_.erase(0, sent);
-  return true;
+  return sent;
 }
 
 }  // namespace myredis

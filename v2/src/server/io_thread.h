@@ -2,15 +2,17 @@
 #define MYREDIS_SERVER_IO_THREAD_H_
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <string>
+#include <span>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 
 #include "concurrent/backpressure_queue.h"
+#include "concurrent/batched_ring_buffer.h"
 #include "concurrent/event_fd.h"
-#include "concurrent/single_consumer_producer_queue.h"
 #include "server/connection.h"
 #include "server/messages.h"
 
@@ -22,8 +24,9 @@ namespace myredis {
 // bytes the main thread produces. Command execution happens on the main thread.
 //
 // Concurrency contract:
-//   - inbox_  is SPSC: the main thread is the sole producer (via PostAssign /
-//     PostResponse), this IO thread is the sole consumer.
+//   - inbox_  is an SPSC byte ring of InboxHeader-framed records: the main
+//     thread is the sole producer (via PostAssign / PostResponse), this IO
+//     thread is the sole consumer and pops everything pending as one batch.
 //   - outbox_ is SPSC: this IO thread is the sole producer, the main thread is
 //     the sole consumer (via GetOutboxMsg).
 //   - command_event (owned by the server, shared by all IO threads) is
@@ -39,6 +42,8 @@ namespace myredis {
 class IoThread {
  public:
   static constexpr std::size_t kQueueCapacity = 2;
+  // Responses larger than this still get through, split across records.
+  static constexpr std::size_t kInboxBytes = std::size_t{1} << 16;
 
   // `command_event` is the main thread's wakeup; it is signalled whenever this
   // thread enqueues an OutboxMsg. It must outlive this IoThread.
@@ -57,8 +62,9 @@ class IoThread {
 
   // Hand a freshly accepted client fd to this thread.
   void PostAssign(int client_fd);
-  // Hand response bytes destined for `client_fd` (owned by this thread).
-  void PostResponse(int client_fd, std::string bytes);
+  // Hand response bytes destined for `client_fd` (owned by this thread). The
+  // bytes are copied into inbox_, so they need not outlive the call.
+  void PostResponse(int client_fd, std::string_view bytes);
 
   // Pop the next IO -> main message, or std::nullopt if none are pending. The
   // main thread (the sole consumer) calls this in a loop when command_event
@@ -69,10 +75,18 @@ class IoThread {
  private:
   void Run();
 
+  // Splits `payload` across several records if it does not fit in the free
+  // space. Main thread only.
+  void PostRecord(InboxRecordType type, int client_fd,
+                  std::string_view payload);
+  std::span<std::byte> WaitForInboxSlot(std::size_t payload_size);
+
   // Inbox handling (main -> this thread).
   void DrainInbox();
+  // `payload` points into inbox_ and is only valid during the call.
+  void HandleRecord(const InboxHeader& header, std::string_view payload);
   void HandleAssign(int client_fd);
-  void HandleWriteResponse(const WriteResponse& response);
+  void HandleWriteResponse(int client_fd, std::string_view bytes);
 
   // Client socket handling.
   void HandleReadable(int client_fd);
@@ -97,7 +111,7 @@ class IoThread {
   int epoll_fd_ = -1;
   EventFd inbox_event_;  // main -> this thread wakeup
 
-  SingleConsumerProducerQueue<InboxMsg, kQueueCapacity> inbox_;
+  BatchRingBuffer<std::byte, kInboxBytes> inbox_;
   BackpressureQueue<OutboxMsg, kQueueCapacity> outbox_;
   // True while client sockets are registered without EPOLLIN.
   bool reading_paused_ = false;

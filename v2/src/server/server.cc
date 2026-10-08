@@ -242,7 +242,7 @@ void Server::ExecuteAndRespond(const CommandBatch& batch) {
 
   const auto iter = fd_to_thread_.find(batch.fd);
   if (iter == fd_to_thread_.end()) return;  // client disconnected meanwhile
-  io_threads_[iter->second]->PostResponse(batch.fd, std::move(response));
+  io_threads_[iter->second]->PostResponse(batch.fd, response);
 }
 
 std::string Server::Execute(const RespValue& request) {

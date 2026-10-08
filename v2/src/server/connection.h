@@ -1,6 +1,8 @@
 #ifndef MYREDIS_SERVER_CONNECTION_H_
 #define MYREDIS_SERVER_CONNECTION_H_
 
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,6 +49,13 @@ class Connection {
   [[nodiscard]] bool HasPendingWrites() const { return !out_buffer_.empty(); }
 
  private:
+  // Writes `bytes` straight to the socket, copying only the unsent tail into
+  // out_buffer_. Requires out_buffer_ to be empty.
+  bool SendAndBufferRemainder(std::string_view bytes);
+  // Returns the number of bytes sent, or std::nullopt on a fatal write error.
+  [[nodiscard]] std::optional<std::size_t> SendUntilWouldBlock(
+      std::string_view bytes) const;
+
   int fd_;
   // Incrementally accumulates received bytes and yields parsed RESP values.
   RespValueQueue parse_queue_;

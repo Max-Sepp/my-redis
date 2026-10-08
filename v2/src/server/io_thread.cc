@@ -7,8 +7,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
+#include <cassert>
 #include <cerrno>
+#include <cstring>
+#include <span>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -17,6 +21,26 @@ namespace myredis {
 
 namespace {
 constexpr std::size_t kMaxEvents = 64;
+
+// Records are packed back to back, so headers may be unaligned; hence memcpy.
+void WriteRecord(const std::span<std::byte> slot, const InboxHeader& header,
+                 const std::string_view payload) {
+  std::memcpy(slot.data(), &header, sizeof(header));
+  if (!payload.empty()) {
+    std::memcpy(slot.data() + sizeof(header), payload.data(), payload.size());
+  }
+}
+
+InboxHeader ReadHeader(const std::byte* record) {
+  InboxHeader header{};
+  std::memcpy(&header, record, sizeof(header));
+  return header;
+}
+
+std::string_view PayloadOf(const std::byte* record, const InboxHeader& header) {
+  return {reinterpret_cast<const char*>(record + sizeof(header)),
+          header.length};
+}
 }  // namespace
 
 IoThread::IoThread(const EventFd& command_event)
@@ -52,20 +76,41 @@ void IoThread::Stop() {
 }
 
 void IoThread::PostAssign(int client_fd) {
-  while (!inbox_.Push(AssignConnection{client_fd})) {
-    std::this_thread::yield();
-  }
-  inbox_event_.Notify();
+  PostRecord(InboxRecordType::kAssignConnection, client_fd, {});
 }
 
-void IoThread::PostResponse(int client_fd, std::string bytes) {
-  // Push copies `msg` into the queue only once it succeeds, so retrying with
-  // the same object is safe.
-  InboxMsg msg = WriteResponse{.fd = client_fd, .bytes = std::move(bytes)};
-  while (!inbox_.Push(msg)) {
+void IoThread::PostResponse(int client_fd, std::string_view bytes) {
+  PostRecord(InboxRecordType::kWriteResponse, client_fd, bytes);
+}
+
+void IoThread::PostRecord(const InboxRecordType type, const int client_fd,
+                          std::string_view payload) {
+  do {
+    const std::span<std::byte> slot = WaitForInboxSlot(payload.size());
+    const std::size_t chunk_size = slot.size() - sizeof(InboxHeader);
+    WriteRecord(slot,
+                {.type = type,
+                 .fd = client_fd,
+                 .length = static_cast<std::uint32_t>(chunk_size)},
+                payload.substr(0, chunk_size));
+    inbox_.Commit(slot.size());
+    inbox_event_.Notify();
+    payload.remove_prefix(chunk_size);
+  } while (!payload.empty());
+}
+
+std::span<std::byte> IoThread::WaitForInboxSlot(
+    const std::size_t payload_size) {
+  // A record must make progress: at least one payload byte, if it has any.
+  const std::size_t smallest_useful_slot =
+      sizeof(InboxHeader) + std::min<std::size_t>(payload_size, 1);
+  while (true) {
+    const std::span<std::byte> slot =
+        inbox_.Reserve(sizeof(InboxHeader) + payload_size);
+    if (slot.size() >= smallest_useful_slot) return slot;
+    inbox_.Commit(0);
     std::this_thread::yield();
   }
-  inbox_event_.Notify();
 }
 
 void IoThread::Run() {
@@ -111,12 +156,29 @@ void IoThread::Run() {
 }
 
 void IoThread::DrainInbox() {
-  while (std::optional<InboxMsg> msg = inbox_.Pop()) {
-    if (const auto* assign = std::get_if<AssignConnection>(&*msg)) {
-      HandleAssign(assign->fd);
-    } else if (const auto* response = std::get_if<WriteResponse>(&*msg)) {
-      HandleWriteResponse(*response);
-    }
+  // Records committed after this snapshot are announced by a later Notify.
+  const std::size_t pending_bytes = inbox_.Size();
+  if (pending_bytes == 0) return;
+  const auto batch = inbox_.Pop(pending_bytes);
+  assert(batch);
+
+  const std::byte* record = batch->begin();
+  while (record != batch->end()) {
+    const InboxHeader header = ReadHeader(record);
+    HandleRecord(header, PayloadOf(record, header));
+    record += sizeof(header) + header.length;
+  }
+}
+
+void IoThread::HandleRecord(const InboxHeader& header,
+                            const std::string_view payload) {
+  switch (header.type) {
+    case InboxRecordType::kAssignConnection:
+      HandleAssign(header.fd);
+      break;
+    case InboxRecordType::kWriteResponse:
+      HandleWriteResponse(header.fd, payload);
+      break;
   }
 }
 
@@ -141,11 +203,12 @@ void IoThread::HandleAssign(int client_fd) {
   epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &event);
 }
 
-void IoThread::HandleWriteResponse(const WriteResponse& response) {
-  const auto it = connections_.find(response.fd);
+void IoThread::HandleWriteResponse(const int client_fd,
+                                   const std::string_view bytes) {
+  const auto it = connections_.find(client_fd);
   if (it == connections_.end()) return;  // client already disconnected
   Connection& conn = it->second;
-  FinishWrite(response.fd, conn, conn.Send(response.bytes));
+  FinishWrite(client_fd, conn, conn.Send(bytes));
 }
 
 void IoThread::HandleReadable(int client_fd) {
