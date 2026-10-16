@@ -2,9 +2,11 @@
 
 #include <array>
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace myredis {
 
@@ -98,14 +100,30 @@ std::string ParseJsonString(const std::string& data, size_t& pos) {
     if (pos >= data.size()) throw std::invalid_argument("dangling escape");
     const char escape = data[pos++];
     switch (escape) {
-      case '"': out.push_back('"'); break;
-      case '\\': out.push_back('\\'); break;
-      case '/': out.push_back('/'); break;
-      case 'b': out.push_back('\b'); break;
-      case 'f': out.push_back('\f'); break;
-      case 'n': out.push_back('\n'); break;
-      case 'r': out.push_back('\r'); break;
-      case 't': out.push_back('\t'); break;
+      case '"':
+        out.push_back('"');
+        break;
+      case '\\':
+        out.push_back('\\');
+        break;
+      case '/':
+        out.push_back('/');
+        break;
+      case 'b':
+        out.push_back('\b');
+        break;
+      case 'f':
+        out.push_back('\f');
+        break;
+      case 'n':
+        out.push_back('\n');
+        break;
+      case 'r':
+        out.push_back('\r');
+        break;
+      case 't':
+        out.push_back('\t');
+        break;
       case 'u': {
         if (pos + 4 > data.size()) {
           throw std::invalid_argument("truncated \\u escape");

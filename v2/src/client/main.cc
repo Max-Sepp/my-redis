@@ -1,7 +1,8 @@
 #include <unistd.h>
 
-#include <cstdio>
+#include <cstdlib>
 #include <cxxopts.hpp>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -9,7 +10,9 @@
 #include "connect.h"
 #include "worker.h"
 
-int main(const int argc, const char* argv[]) {
+namespace {
+
+int Run(const int argc, const char* const* argv) {
   cxxopts::Options options(
       "My Redis Client",
       "A basic redis client which is extend to work with my redis server.");
@@ -42,4 +45,15 @@ int main(const int argc, const char* argv[]) {
   close(sock);
 
   return 0;
+}
+
+}  // namespace
+
+int main(const int argc, const char* argv[]) {
+  try {
+    return Run(argc, argv);
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+    return EXIT_FAILURE;
+  }
 }

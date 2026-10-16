@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/del_request_handler.h"
 #include "server/handler/echo_request_handler.h"
 #include "server/handler/expire_request_handler.h"
@@ -12,6 +14,7 @@
 #include "server/handler/set_request_handler.h"
 #include "server/handler/ttl_request_handler.h"
 #include "server/handler/unknown_request_handler.h"
+#include "store/store.h"
 
 namespace {
 constexpr int SECONDS_TO_MILLISECONDS = 1000;
@@ -32,8 +35,7 @@ RequestDispatcher::RequestDispatcher(const std::unique_ptr<Store>& store)
       "PEXPIRE", 1, /*relative_to_now=*/true, store_));
   // EXPIREAT handler
   handlers_.push_back(std::make_unique<ExpireRequestHandler>(
-      "EXPIREAT", SECONDS_TO_MILLISECONDS, /*relative_to_now=*/false,
-      store_));
+      "EXPIREAT", SECONDS_TO_MILLISECONDS, /*relative_to_now=*/false, store_));
   // PEXPIREAT handler
   handlers_.push_back(std::make_unique<ExpireRequestHandler>(
       "PEXPIREAT", 1, /*relative_to_now=*/false, store_));

@@ -20,7 +20,7 @@ class HelloRequestHandler final : public Handler {
 
   void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
-    if (command->args.size() == 1 && command->args[0] != "2") {
+    if (command && command->args.size() == 1 && command->args[0] != "2") {
       out.Error("NOPROTO unsupported protocol version");
       return;
     }

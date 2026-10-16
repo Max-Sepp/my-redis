@@ -11,13 +11,12 @@ namespace myredis {
 class PingRequestHandler final : public Handler {
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "PING" &&
-           (command->args.size() == 0 || command->args.size() == 1);
+    return command && command->name == "PING" && command->args.size() <= 1;
   }
 
   void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
-    if (command->args.size() == 0) {
+    if (!command || command->args.empty()) {
       out.SimpleString("PONG");
       return;
     }

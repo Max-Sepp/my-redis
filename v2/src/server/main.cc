@@ -1,8 +1,13 @@
+#include <cstdlib>
 #include <cxxopts.hpp>
+#include <exception>
+#include <iostream>
 
 #include "server/server.h"
 
-int main(const int argc, const char* argv[]) {
+namespace {
+
+int Run(const int argc, const char* const* argv) {
   cxxopts::Options options(
       "My Redis Server",
       "A multi-threaded redis server: a single main thread "
@@ -17,6 +22,18 @@ int main(const int argc, const char* argv[]) {
   const int port = result["port"].as<int>();
   const int snapshot_interval = result["snapshot"].as<int>();
 
-  myredis::Server server({.port = port, .snapshot_interval_ms = snapshot_interval});
+  myredis::Server server(
+      {.port = port, .snapshot_interval_ms = snapshot_interval});
   return server.Run();
+}
+
+}  // namespace
+
+int main(const int argc, const char* argv[]) {
+  try {
+    return Run(argc, argv);
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+    return EXIT_FAILURE;
+  }
 }

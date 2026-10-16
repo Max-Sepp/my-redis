@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include "resp_value/resp_value.h"
 
@@ -293,8 +296,7 @@ TEST_F(RespParsingTest, ParseIntegerEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringNonNumericLength) {
-  EXPECT_THROW(RespValue::FromString("$abc\r\nfoo\r\n"),
-               std::invalid_argument);
+  EXPECT_THROW(RespValue::FromString("$abc\r\nfoo\r\n"), std::invalid_argument);
 }
 
 TEST_F(RespParsingTest, ParseArrayNonNumericLength) {
@@ -381,12 +383,12 @@ TEST(RespSerializeTests, ArrayWithElements) {
 }
 
 TEST(RespSerializeTests, IntegerExtremes) {
-  EXPECT_EQ(RespValue::FromVariant(std::numeric_limits<long long>::min())
-                .Serialize(),
-            ":-9223372036854775808\r\n");
-  EXPECT_EQ(RespValue::FromVariant(std::numeric_limits<long long>::max())
-                .Serialize(),
-            ":9223372036854775807\r\n");
+  EXPECT_EQ(
+      RespValue::FromVariant(std::numeric_limits<long long>::min()).Serialize(),
+      ":-9223372036854775808\r\n");
+  EXPECT_EQ(
+      RespValue::FromVariant(std::numeric_limits<long long>::max()).Serialize(),
+      ":9223372036854775807\r\n");
 }
 
 TEST(RespSerializeTests, NestedArray) {

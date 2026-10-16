@@ -26,13 +26,17 @@ class TtlRequestHandler final : public Handler {
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
     return command && command->name == handler_name_ &&
-           command->args.size() == 1 && command->args[0].has_value() &&
-           !command->args[0]->empty();
+           command->args.size() == 1 && KeyArg(*command, 0) != nullptr;
   }
 
   void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
-    const std::int64_t result = store_->Ttl(*command->args[0]);
+    const std::string* key = command ? KeyArg(*command, 0) : nullptr;
+    if (key == nullptr) {
+      out.Error("ERR syntax error");
+      return;
+    }
+    const std::int64_t result = store_->Ttl(*key);
     // -1 (no TTL) and -2 (no key) are sentinels, not durations — don't
     // convert them.
     out.Integer(result < 0 ? result : result / time_conversion_factor_);

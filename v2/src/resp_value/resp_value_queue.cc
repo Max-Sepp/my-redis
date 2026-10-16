@@ -1,6 +1,12 @@
 #include "resp_value_queue.h"
 
 #include <cassert>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <utility>
+
+#include "resp_value/resp_value.h"
 
 namespace myredis {
 

@@ -2,9 +2,15 @@
 
 #include <cassert>
 #include <charconv>
+#include <cstddef>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <system_error>
+#include <type_traits>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace myredis {
 

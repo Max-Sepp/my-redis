@@ -1,5 +1,6 @@
 #include "store.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -9,6 +10,7 @@
 
 #include "store/map/standard_map.h"
 #include "store/serialise.h"
+#include "time/time.h"
 
 namespace myredis {
 
@@ -37,7 +39,7 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms) {
 }
 
 bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
-                      ExpireOption option) {
+                     ExpireOption option) {
   const auto found = data_->LookUp(key);
   if (!found.has_value()) return false;
   Entry& entry = *found;
