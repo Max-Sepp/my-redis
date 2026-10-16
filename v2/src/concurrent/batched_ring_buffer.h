@@ -196,6 +196,7 @@ class BatchRingBuffer {
     const auto page_size = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
     assert(std::has_single_bit(page_size));
     const std::size_t granule = std::lcm(page_size, sizeof(T));
+    if (granule == 0) throw std::logic_error("page size must be nonzero");
     const std::size_t bytes = (sizeof(T) * M + granule - 1) / granule * granule;
     return std::bit_ceil(bytes / sizeof(T));
   }
@@ -204,15 +205,13 @@ class BatchRingBuffer {
   // read-only fields share the consumer's line, which the producer already
   // reads for head_.
   // Total elements ever popped and pushed; never wrapped.
-  alignas(kCacheLineSize)
-      std::atomic<std::size_t> head_{0};
+  alignas(kCacheLineSize) std::atomic<std::size_t> head_{0};
   bool current_popping_{false};
   int fd_;
   T* data_;
   const std::size_t slot_count_;
 
-  alignas(kCacheLineSize)
-      std::atomic<std::size_t> tail_{0};
+  alignas(kCacheLineSize) std::atomic<std::size_t> tail_{0};
   std::size_t reserved_{0};
   bool current_reserving_{false};
 };

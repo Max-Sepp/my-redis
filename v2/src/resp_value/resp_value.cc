@@ -6,11 +6,15 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "resp_value/byte_sink.h"
+#include "resp_value/resp_writer.h"
 
 namespace myredis {
 

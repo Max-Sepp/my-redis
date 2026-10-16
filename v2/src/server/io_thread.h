@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -13,6 +14,7 @@
 #include "concurrent/backpressure_queue.h"
 #include "concurrent/batched_ring_buffer.h"
 #include "concurrent/event_fd.h"
+#include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
 #include "server/connection.h"
 #include "server/messages.h"
@@ -68,7 +70,14 @@ class IoThread {
    public:
     ResponseWriter(const ResponseWriter&) = delete;
     ResponseWriter& operator=(const ResponseWriter&) = delete;
-    ~ResponseWriter() override { Finish(); }
+    ~ResponseWriter() override {
+      // Finish only throws on inbox misuse, a bug we cannot recover from here.
+      try {
+        Finish();
+      } catch (...) {
+        std::terminate();
+      }
+    }
 
     void Append(std::string_view bytes) override;
     // Publishes any bytes not yet handed to the IO thread.
@@ -135,17 +144,15 @@ class IoThread {
   // Apply InterestMask(writable) to an already registered client fd.
   void UpdateEpoll(int client_fd, bool writable) const;
 
-  int epoll_fd_ = -1;
-  EventFd inbox_event_;  // main -> this thread wakeup
-
   BatchRingBuffer<std::byte, kInboxBytes> inbox_;
-  bool writer_open_ = false;  // main thread only
   BackpressureQueue<OutboxMsg, kQueueCapacity> outbox_;
+  std::thread thread_;
+  std::unordered_map<int, Connection> connections_;
+  int epoll_fd_ = -1;
+  EventFd inbox_event_;       // main -> this thread wakeup
+  bool writer_open_ = false;  // main thread only
   // True while client sockets are registered without EPOLLIN.
   bool reading_paused_ = false;
-
-  std::unordered_map<int, Connection> connections_;
-  std::thread thread_;
   std::atomic<bool> running_{false};
 };
 

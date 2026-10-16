@@ -7,6 +7,8 @@
 #include <limits>
 #include <system_error>
 
+#include "resp_value/byte_sink.h"
+
 namespace myredis {
 
 namespace {

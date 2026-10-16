@@ -49,7 +49,7 @@ std::string_view PayloadOf(const std::byte* record, const InboxHeader& header) {
 }  // namespace
 
 IoThread::IoThread(const EventFd& command_event)
-    : epoll_fd_(epoll_create1(EPOLL_CLOEXEC)), outbox_(command_event) {
+    : outbox_(command_event), epoll_fd_(epoll_create1(EPOLL_CLOEXEC)) {
   // Register the inbox and outbox wakeups so the main thread can hand us work,
   // or tell us outbox_ has room, while we are blocked in epoll_wait.
   for (const int wakeup_fd :

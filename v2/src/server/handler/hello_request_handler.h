@@ -1,6 +1,8 @@
 #ifndef MYREDIS_SERVER_HANDLER_HELLO_REQUEST_HANDLER_H_
 #define MYREDIS_SERVER_HANDLER_HELLO_REQUEST_HANDLER_H_
 
+#include <cstddef>
+
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
@@ -25,7 +27,8 @@ class HelloRequestHandler final : public Handler {
       return;
     }
     // Six key/value pairs.
-    out.ArrayHeader(12);
+    constexpr std::size_t kReplyElements = 12;
+    out.ArrayHeader(kReplyElements);
     out.BulkString("server");
     out.BulkString("myredis");
     out.BulkString("version");

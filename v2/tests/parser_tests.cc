@@ -7,6 +7,7 @@
 #include <string_view>
 #include <variant>
 
+#include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
 
 using myredis::RespValue;

@@ -24,7 +24,9 @@
 #include <utility>
 #include <variant>
 
+#include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
 #include "store/store.h"

@@ -12,8 +12,8 @@ namespace myredis {
 
 template <typename T, std::size_t N>
 class SingleConsumerProducerQueue {
-  std::array<std::optional<T>, N + 1> buffer_{};
   alignas(kCacheLineSize) std::atomic<size_t> head_{0};
+  std::array<std::optional<T>, N + 1> buffer_{};
   alignas(kCacheLineSize) std::atomic<size_t> tail_{0};
 
   static size_t increment(const size_t index) { return (index + 1) % (N + 1); }

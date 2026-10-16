@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <span>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -15,6 +16,33 @@ namespace {
 // straddling the end has to be read through the mirror mapping.
 constexpr std::size_t kPageOfInts = 4096 / sizeof(int);
 
+// A 12-byte element, so a page is not a whole number of them.
+struct Triple {
+  int first;
+  int second;
+  int third;
+};
+
+Triple MakeTriple(const int value) {
+  return {.first = value, .second = -value, .third = value * 2};
+}
+
+// Pops `count` elements and copies them out, releasing the batch before
+// returning. Empty if fewer than `count` elements were available.
+template <std::size_t M>
+std::vector<int> PopCopy(BatchRingBuffer<int, M>& buffer,
+                         const std::size_t count) {
+  auto batch = buffer.Pop(count);
+  if (!batch) return {};
+  return {batch->begin(), batch->end()};
+}
+
+void ExpectTriple(const Triple& triple, const int value) {
+  EXPECT_EQ(triple.first, value);
+  EXPECT_EQ(triple.second, -value);
+  EXPECT_EQ(triple.third, value * 2);
+}
+
 TEST(BatchRingBufferTest, PopsElementsInPushOrder) {
   constexpr std::size_t kCapacity = 8;
   constexpr int kPushed = 5;
@@ -24,19 +52,22 @@ TEST(BatchRingBufferTest, PopsElementsInPushOrder) {
   }
   EXPECT_EQ(buffer.Size(), kPushed);
 
-  {
-    auto batch = buffer.Pop(3);
-    ASSERT_TRUE(batch.has_value());
-    EXPECT_EQ(std::vector<int>(batch->begin(), batch->end()),
-              (std::vector<int>{0, 1, 2}));
-  }
+  EXPECT_EQ(PopCopy(buffer, 3), (std::vector<int>{0, 1, 2}));
   EXPECT_EQ(buffer.Size(), 2);
+  EXPECT_EQ(PopCopy(buffer, 2), (std::vector<int>{3, 4}));
+}
 
-  auto rest = buffer.Pop(2);
-  ASSERT_TRUE(rest.has_value());
-  EXPECT_EQ((*rest)[0], 3);
-  EXPECT_EQ((*rest)[1], 4);
-  EXPECT_THROW((void)(*rest)[2], std::out_of_range);
+TEST(BatchRingBufferTest, IndexingPastBatchEndThrows) {
+  constexpr std::size_t kCapacity = 8;
+  BatchRingBuffer<int, kCapacity> buffer;
+  ASSERT_TRUE(buffer.Push(3));
+  ASSERT_TRUE(buffer.Push(4));
+
+  auto batch = buffer.Pop(2);
+  ASSERT_TRUE(batch.has_value());
+  EXPECT_EQ((*batch)[0], 3);
+  EXPECT_EQ((*batch)[1], 4);
+  EXPECT_THROW((void)(*batch)[2], std::out_of_range);
 }
 
 TEST(BatchRingBufferTest, PopReturnsNulloptWhenTooFewElements) {
@@ -88,11 +119,6 @@ TEST(BatchRingBufferTest, BatchIsContiguousAcrossTheWrap) {
 TEST(BatchRingBufferTest, CapacityNotAPageMultiple) {
   // 12-byte elements: 1000 of them round up to lcm(4096, 12) = 12288 bytes, so
   // the buffer has 1024 slots but must still stop at 1000 elements.
-  struct Triple {
-    int first;
-    int second;
-    int third;
-  };
   constexpr std::size_t kCapacity = 1000;
   constexpr std::size_t kBatchSize = 7;
   constexpr int kRounds = 1000;
@@ -101,19 +127,11 @@ TEST(BatchRingBufferTest, CapacityNotAPageMultiple) {
   int next_push = 0;
   int next_pop = 0;
   for (int round = 0; round < kRounds; ++round) {
-    while (buffer.Push(
-        {.first = next_push, .second = -next_push, .third = next_push * 2})) {
-      ++next_push;
-    }
+    while (buffer.Push(MakeTriple(next_push))) ++next_push;
     EXPECT_EQ(buffer.Size(), kCapacity);
     auto batch = buffer.Pop(kBatchSize);
     ASSERT_TRUE(batch.has_value());
-    for (const Triple& triple : *batch) {
-      EXPECT_EQ(triple.first, next_pop);
-      EXPECT_EQ(triple.second, -next_pop);
-      EXPECT_EQ(triple.third, next_pop * 2);
-      ++next_pop;
-    }
+    for (const Triple& triple : *batch) ExpectTriple(triple, next_pop++);
   }
 }
 
