@@ -1,18 +1,28 @@
 #include "snapshotter.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <cerrno>
 #include <charconv>
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
+
+#include "store/store.h"
 
 namespace myredis {
 namespace {
@@ -31,7 +41,8 @@ std::optional<std::filesystem::path> LatestSnapshot(
   long long best_timestamp = -1;
 
   std::error_code dir_error;
-  for (const auto& entry : std::filesystem::directory_iterator(dir, dir_error)) {
+  for (const auto& entry :
+       std::filesystem::directory_iterator(dir, dir_error)) {
     if (!entry.is_regular_file()) continue;
     const std::string name = entry.path().filename().string();
     if (!name.starts_with(prefix) || !name.ends_with(kSnapshotSuffix)) continue;
@@ -57,12 +68,16 @@ void DurableWrite(const std::filesystem::path& output_path,
     dir = ".";
   }
 
-  // Use a std::string so mkstemp can mutate the template in place, rather than
-  // const_cast-ing path::c_str() (which would be undefined behaviour).
-  std::string tmp_file = (dir / ".tmp-XXXXXX").string();
+  // Write next to the target so the final rename stays on one filesystem (and
+  // is therefore atomic). Snapshot names are already unique per write, so
+  // deriving the temp name from the target can't collide with another writer.
+  const std::filesystem::path tmp_file = output_path.string() + ".tmp";
 
-  int temp_fd = mkstemp(tmp_file.data());
-  if (temp_fd == -1) throw std::runtime_error("mkstemp failed");
+  // rw-r--r--, like an ordinary file.
+  constexpr mode_t kSnapshotMode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+  int temp_fd = open(tmp_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC,
+                     kSnapshotMode);
+  if (temp_fd == -1) throw std::runtime_error("open(tmp) failed");
 
   try {
     // Write everything to the temp file
@@ -118,10 +133,10 @@ void Snapshotter::Snapshot(const std::unique_ptr<Store>& store) {
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();
 
-  DurableWrite(output_dir_ / (snapshot_file_prefix_ +
-                              std::to_string(timestamp) +
-                              std::string(kSnapshotSuffix)),
-               store_json);
+  DurableWrite(
+      output_dir_ / (snapshot_file_prefix_ + std::to_string(timestamp) +
+                     std::string(kSnapshotSuffix)),
+      store_json);
 }
 
 bool Snapshotter::Restore(const std::unique_ptr<Store>& store) const {

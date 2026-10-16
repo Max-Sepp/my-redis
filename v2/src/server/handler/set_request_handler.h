@@ -22,12 +22,17 @@ class SetRequestHandler final : public Handler {
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
     return command && command->name == "SET" && command->args.size() == 2 &&
-           command->args[0].has_value() && !command->args[0]->empty();
+           KeyArg(*command, 0) != nullptr;
   }
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    store_->Set(*command->args[0], command->args[1]);
+    if (!command || command->args.size() != 2) {
+      return Error("ERR syntax error");
+    }
+    const std::string* key = KeyArg(*command, 0);
+    if (key == nullptr) return Error("ERR syntax error");
+    store_->Set(*key, command->args[1]);
     return SimpleString("OK");
   }
 

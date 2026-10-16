@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <optional>
+#include <stdexcept>
+#include <variant>
+
 #include "resp_value/resp_value.h"
 
 using myredis::RespValue;
@@ -289,8 +293,7 @@ TEST_F(RespParsingTest, ParseIntegerEmpty) {
 }
 
 TEST_F(RespParsingTest, ParseBulkStringNonNumericLength) {
-  EXPECT_THROW(RespValue::FromString("$abc\r\nfoo\r\n"),
-               std::invalid_argument);
+  EXPECT_THROW(RespValue::FromString("$abc\r\nfoo\r\n"), std::invalid_argument);
 }
 
 TEST_F(RespParsingTest, ParseArrayNonNumericLength) {

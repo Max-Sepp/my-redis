@@ -24,7 +24,7 @@ class Snapshotter {
   // with the largest timestamp. Returns false only if such a snapshot exists
   // but cannot be read or parsed; a missing snapshot is a normal first run and
   // returns true (leaving `store` untouched).
-  bool Restore(const std::unique_ptr<Store>& store) const;
+  [[nodiscard]] bool Restore(const std::unique_ptr<Store>& store) const;
 
  private:
   const std::filesystem::path output_dir_;

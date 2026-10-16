@@ -26,12 +26,11 @@ struct Command {
 // well-formed command array (not an array, empty, or a non-bulk-string /
 // null / empty command keyword).
 inline std::optional<Command> ParseCommand(const RespValue& request) {
-  const auto* array =
-      std::get_if<RespValue::RespArray>(&request.GetValue());
+  const auto* array = std::get_if<RespValue::RespArray>(&request.GetValue());
   if (array == nullptr || array->empty()) return std::nullopt;
 
-  const auto* name = std::get_if<RespValue::RespBulkString>(
-      &array->front().GetValue());
+  const auto* name =
+      std::get_if<RespValue::RespBulkString>(&array->front().GetValue());
   if (name == nullptr || !name->has_value() || (*name)->empty()) {
     return std::nullopt;
   }
@@ -46,6 +45,15 @@ inline std::optional<Command> ParseCommand(const RespValue& request) {
     command.args.push_back(*arg);
   }
   return command;
+}
+
+// Returns args[index] if it exists and is a non-null, non-empty bulk string
+// (i.e. usable as a key), or nullptr otherwise.
+inline const std::string* KeyArg(const Command& command, std::size_t index) {
+  if (index >= command.args.size()) return nullptr;
+  const std::optional<std::string>& arg = command.args[index];
+  if (!arg.has_value() || arg->empty()) return nullptr;
+  return &*arg;
 }
 
 }  // namespace myredis

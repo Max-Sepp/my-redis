@@ -1,5 +1,11 @@
 #include "resp_values.h"
 
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "resp_value/resp_value.h"
+
 namespace myredis {
 
 RespValue NullBulkString() { return RespValue::FromVariant(std::nullopt); }

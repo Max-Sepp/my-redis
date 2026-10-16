@@ -1,35 +1,31 @@
 #include "send_all.h"
 
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include <cerrno>
-#include <cstdint>
+#include <cstddef>
+#include <string_view>
 
 namespace myredis {
 
-ssize_t SendAll(const int fd, const void *buf, const size_t len,
-                const int flags) {
-  auto p = static_cast<const std::uint8_t *>(buf);
-  size_t remaining = len;
-  while (remaining > 0) {
-    const ssize_t n = send(fd, p, remaining, flags);
-    if (n > 0) {
-      p += n;
-      remaining -= n;
-      continue;
-    }
-    if (n == 0) return len - remaining;  // peer closed
-    if (n == -1) {
-      if (errno == EINTR) continue;  // retry
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // For non-blocking sockets: caller must wait for writable
-        // (select/poll/epoll) then retry
-        return -2;  // indicate would-block to caller
-      }
-      return -1;  // other fatal error
+ssize_t SendAll(const int socket_fd, std::string_view data, const int flags) {
+  const auto total = static_cast<ssize_t>(data.size());
+  while (!data.empty()) {
+    const ssize_t sent = send(socket_fd, data.data(), data.size(), flags);
+    if (sent > 0) {
+      data.remove_prefix(static_cast<size_t>(sent));
+    } else if (sent == 0) {  // peer closed
+      return total - static_cast<ssize_t>(data.size());
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // For non-blocking sockets: caller must wait for writable
+      // (select/poll/epoll) then retry
+      return -2;                  // indicate would-block to caller
+    } else if (errno != EINTR) {  // EINTR: loop round and retry
+      return -1;                  // other fatal error
     }
   }
-  return len;  // all bytes sent
+  return total;  // all bytes sent
 }
 
 }  // namespace myredis
