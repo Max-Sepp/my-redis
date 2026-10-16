@@ -1,9 +1,12 @@
 #include "connect.h"
 
 #include <netdb.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
+#include <cstdio>
 #include <iostream>
+#include <string>
 
 namespace myredis {
 

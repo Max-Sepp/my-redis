@@ -25,6 +25,7 @@ Checks: >
   misc-throw-by-value-catch-by-reference,
   misc-unconventional-assign-operator,
   misc-uniqueptr-reset-release,
+  misc-include-cleaner,
   modernize-*,
   mpi-buffer-deref,
   mpi-type-mismatch,
@@ -38,7 +39,11 @@ Checks: >
   -google-readability-braces-around-statements,
   -hicpp-braces-around-statements
 WarningsAsErrors: '*'
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: '.*/v2/src/.*'
 CheckOptions:
   - key: readability-identifier-length.IgnoredVariableNames
     value: '^it$'
+  # Don't suggest glibc/kernel implementation headers; the public POSIX header
+  # already included (e.g. <sys/socket.h>, <sys/timerfd.h>) is the right one.
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: 'bits/.*;asm-generic/.*;asm/.*;linux/.*'

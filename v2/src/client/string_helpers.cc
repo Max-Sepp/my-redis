@@ -1,5 +1,9 @@
 #include "string_helpers.h"
 
+#include <cstddef>
+#include <string>
+#include <vector>
+
 namespace myredis {
 
 std::vector<std::string> Split(const std::string& delimiter,

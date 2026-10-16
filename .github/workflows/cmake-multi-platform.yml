@@ -23,24 +23,12 @@ jobs:
       matrix:
         os: [ ubuntu-latest ]
         build_type: [ Debug ]
-        c_compiler: [ gcc, clang, cl ]
+        c_compiler: [ gcc, clang ]
         include:
-          #          - os: windows-latest
-          #            c_compiler: cl
-          #            cpp_compiler: cl
-          - os: ubuntu-latest
-            c_compiler: gcc
+          - c_compiler: gcc
             cpp_compiler: g++
-          - os: ubuntu-latest
-            c_compiler: clang
+          - c_compiler: clang
             cpp_compiler: clang++
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
-            c_compiler: clang
-          - os: ubuntu-latest
-            c_compiler: cl
 
     steps:
       - uses: actions/checkout@v6
@@ -67,12 +55,34 @@ jobs:
           -S ${{ github.workspace }}/v2
 
       - name: Build
-        # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-      - name: Test
+      - name: Install LLVM lint tools
+        # Use the newest clang-format/clang-tidy packaged in the runner's
+        # Ubuntu archive. Lint runs once, on the clang leg, against the
+        # compile_commands.json produced by the configure step above.
+        if: matrix.c_compiler == 'clang'
+        run: |
+          sudo apt-get update
+          LLVM_VERSION=$(apt-cache search --names-only '^clang-tidy-[0-9]+$' \
+            | cut -d' ' -f1 | sed 's/^clang-tidy-//' | sort -n | tail -1)
+          echo "Using LLVM $LLVM_VERSION"
+          sudo apt-get install -y "clang-format-$LLVM_VERSION" "clang-tidy-$LLVM_VERSION"
+          echo "CLANG_FORMAT=clang-format-$LLVM_VERSION" >> "$GITHUB_ENV"
+          echo "CLANG_TIDY=clang-tidy-$LLVM_VERSION" >> "$GITHUB_ENV"
+          echo "RUN_CLANG_TIDY=run-clang-tidy-$LLVM_VERSION" >> "$GITHUB_ENV"
+
+      - name: clang-format
+        if: matrix.c_compiler == 'clang'
+        run: make format-check
+
+      - name: clang-tidy
+        if: matrix.c_compiler == 'clang'
+        run: make tidy-check TIDY_BUILD_DIR=${{ steps.strings.outputs.build-output-dir }}
+
+      - name: Unit tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
+        # Execute tests defined by the CMake configuration.
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
         # Tests are built via -DBUILD_TESTS=ON in the configure step; fail if none are found.
         # Abort on the first sanitizer finding so ctest reports a failure.

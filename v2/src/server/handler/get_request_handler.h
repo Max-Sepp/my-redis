@@ -23,12 +23,14 @@ class GetRequestHandler final : public Handler {
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
     return command && command->name == "GET" && command->args.size() == 1 &&
-           command->args[0].has_value() && !command->args[0]->empty();
+           KeyArg(*command, 0) != nullptr;
   }
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    const std::optional<std::string> found = store_->Get(*command->args[0]);
+    const std::string* key = command ? KeyArg(*command, 0) : nullptr;
+    if (key == nullptr) return Error("ERR syntax error");
+    const std::optional<std::string> found = store_->Get(*key);
     if (!found.has_value()) return NullBulkString();
     return BulkString(found);
   }

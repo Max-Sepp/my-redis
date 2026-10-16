@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <type_traits>
@@ -17,7 +18,7 @@ namespace myredis {
 
 template <typename K, typename V>
 class LinearProbingHashmap final : public Map<K, V> {
-  enum State { EMPTY, DELETED, ELEMENT };
+  enum State : std::uint8_t { EMPTY, DELETED, ELEMENT };
   struct Entry {
     Entry() : state(EMPTY), key(std::nullopt), value(std::nullopt) {}
     Entry(const State state, const std::optional<K>& key,
@@ -82,13 +83,12 @@ class LinearProbingHashmap final : public Map<K, V> {
   std::optional<std::reference_wrapper<V>> LookUp(const K& key) override {
     const int value_bucket_index = InternalFind(key);
 
-    if (value_bucket_index != -1) {
-      assert(entries_[value_bucket_index].value.has_value());
-      return std::optional<std::reference_wrapper<V>>(
-          std::ref(entries_[value_bucket_index].value.value()));
-    }
+    if (value_bucket_index == -1) return std::nullopt;
 
-    return std::nullopt;
+    std::optional<V>& value = entries_[value_bucket_index].value;
+    assert(value.has_value());
+    if (!value.has_value()) return std::nullopt;
+    return std::optional<std::reference_wrapper<V>>(std::ref(*value));
   }
 
   void Insert(K key, V value) override {
@@ -105,10 +105,12 @@ class LinearProbingHashmap final : public Map<K, V> {
 
   void ForEach(std::function<void(const K&, V&)> action) override {
     for (Entry& entry : entries_) {
-      if (entry.state != ELEMENT) continue;
-
-      assert(entry.key.has_value() && entry.value.has_value());
-      action(entry.key.value(), entry.value.value());
+      assert(entry.state != ELEMENT ||
+             (entry.key.has_value() && entry.value.has_value()));
+      if (entry.state == ELEMENT && entry.key.has_value() &&
+          entry.value.has_value()) {
+        action(*entry.key, *entry.value);
+      }
     }
   }
 
@@ -119,9 +121,7 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
 
     size_t bucket_index = hash_(key) % entries_.size();
-    while (entries_[bucket_index].state == ELEMENT &&
-           entries_[bucket_index].key.has_value() &&
-           entries_[bucket_index].key.value() != key) {
+    while (HoldsOtherKey(entries_[bucket_index], key)) {
       bucket_index = (bucket_index + 1) % entries_.size();
     }
 
@@ -137,12 +137,19 @@ class LinearProbingHashmap final : public Map<K, V> {
         std::max(static_cast<size_t>(2), old_entries.size() * 2));
 
     for (Entry& entry : old_entries) {
-      if (entry.state != ELEMENT) continue;
-
-      assert(entry.key.has_value() && entry.value.has_value());
-      InsertWithoutSize(std::move(entry.key.value()),
-                        std::move(entry.value.value()));
+      assert(entry.state != ELEMENT ||
+             (entry.key.has_value() && entry.value.has_value()));
+      if (entry.state == ELEMENT && entry.key.has_value() &&
+          entry.value.has_value()) {
+        InsertWithoutSize(std::move(*entry.key), std::move(*entry.value));
+      }
     }
+  }
+
+  // True if `entry` is occupied by a key other than `key`, i.e. probing must
+  // continue past it.
+  static bool HoldsOtherKey(const Entry& entry, const K& key) {
+    return entry.state == ELEMENT && entry.key.has_value() && *entry.key != key;
   }
 
   // Returns -1 if key cannot be found
@@ -151,9 +158,7 @@ class LinearProbingHashmap final : public Map<K, V> {
     const size_t initial_bucket_index = bucket_index;
 
     while (entries_[bucket_index].state == DELETED ||
-           (entries_[bucket_index].state == ELEMENT &&
-            entries_[bucket_index].key.has_value() &&
-            entries_[bucket_index].key.value() != key)) {
+           HoldsOtherKey(entries_[bucket_index], key)) {
       bucket_index = (bucket_index + 1) % entries_.size();
       if (bucket_index == initial_bucket_index) {
         // Gone through every element in the hashmap and could not find the key

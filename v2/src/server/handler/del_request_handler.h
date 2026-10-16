@@ -22,12 +22,14 @@ class DelRequestHandler final : public Handler {
   [[nodiscard]] bool IsHandler(const RespValue& request) const override {
     const std::optional<Command> command = ParseCommand(request);
     return command && command->name == "DEL" && command->args.size() == 1 &&
-           command->args[0].has_value() && !command->args[0]->empty();
+           KeyArg(*command, 0) != nullptr;
   }
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    store_->Del(*command->args[0]);
+    const std::string* key = command ? KeyArg(*command, 0) : nullptr;
+    if (key == nullptr) return Error("ERR syntax error");
+    store_->Del(*key);
     return Integer(1);
   }
 

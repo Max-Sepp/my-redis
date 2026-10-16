@@ -1,13 +1,17 @@
 #include "connection.h"
 
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <array>
 #include <cerrno>
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
+
+#include "resp_value/resp_value.h"
 
 namespace myredis {
 

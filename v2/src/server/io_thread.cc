@@ -1,17 +1,27 @@
 #include "io_thread.h"
 
 #include <fcntl.h>
-#include <netinet/in.h>
+#include <netinet/in.h>  // IWYU pragma: keep (IPPROTO_TCP)
 #include <netinet/tcp.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <array>
+#include <atomic>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "concurrent/event_fd.h"
+#include "server/connection.h"
+#include "server/messages.h"
 
 namespace myredis {
 
@@ -20,8 +30,7 @@ constexpr std::size_t kMaxEvents = 64;
 }  // namespace
 
 IoThread::IoThread(const EventFd& command_event)
-    : epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
-      outbox_(command_event) {
+    : epoll_fd_(epoll_create1(EPOLL_CLOEXEC)), outbox_(command_event) {
   // Register the inbox and outbox wakeups so the main thread can hand us work,
   // or tell us outbox_ has room, while we are blocked in epoll_wait.
   for (const int wakeup_fd :

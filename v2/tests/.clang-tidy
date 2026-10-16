@@ -1,0 +1,6 @@
+# Tests guard optionals with gtest's ASSERT_TRUE(x.has_value()), which
+# bugprone-unchecked-optional-access does not understand; everything else is
+# inherited from v2/.clang-tidy.
+InheritParentConfig: true
+Checks: >
+  -bugprone-unchecked-optional-access

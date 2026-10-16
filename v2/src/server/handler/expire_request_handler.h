@@ -36,22 +36,22 @@ class ExpireRequestHandler final : public Handler {
     const std::optional<Command> command = ParseCommand(request);
     return command && command->name == handler_name_ &&
            (command->args.size() == 2 || command->args.size() == 3) &&
-           command->args[0].has_value() && !command->args[0]->empty() &&
+           KeyArg(*command, 0) != nullptr &&
            ParseInteger(command->args[1]).has_value() &&
-           (command->args.size() == 2 ||
-            Store::ToExpireOption(*command->args[2]).has_value());
+           ParseOption(*command).has_value();
   }
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
-    const int64_t value = *ParseInteger(command->args[1]);
-    const Store::ExpireOption option =
-        command->args.size() == 3 ? *Store::ToExpireOption(*command->args[2])
-                                  : Store::ExpireOption::NA;
+    if (!command || command->args.size() < 2) return Error("ERR syntax error");
+    const std::string* key = KeyArg(*command, 0);
+    const std::optional<int64_t> value = ParseInteger(command->args[1]);
+    const std::optional<Store::ExpireOption> option = ParseOption(*command);
+    if (key == nullptr || !value || !option) return Error("ERR syntax error");
+
     const int64_t base = relative_to_now_ ? store_->NowMs() : 0;
-    const int64_t proposed_expiry = base + (value * time_conversion_factor_);
-    const bool set =
-        store_->ExpireAt(*command->args[0], proposed_expiry, option);
+    const int64_t proposed_expiry = base + (*value * time_conversion_factor_);
+    const bool set = store_->ExpireAt(*key, proposed_expiry, *option);
     return Integer(set ? 1 : 0);
   }
 
@@ -66,6 +66,16 @@ class ExpireRequestHandler final : public Handler {
       return std::nullopt;
     }
     return value;
+  }
+
+  // Returns the optional [NX|XX|GT|LT] argument, ExpireOption::NA when it is
+  // absent, or std::nullopt when it is present but invalid.
+  static std::optional<Store::ExpireOption> ParseOption(
+      const Command& command) {
+    if (command.args.size() < 3) return Store::ExpireOption::NA;
+    const std::optional<std::string>& arg = command.args[2];
+    if (!arg.has_value()) return std::nullopt;
+    return Store::ToExpireOption(*arg);
   }
 
   // Bound to the server's store handle, not the store itself, so the

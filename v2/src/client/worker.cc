@@ -1,10 +1,15 @@
 #include "worker.h"
 
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <array>
+#include <cerrno>
+#include <cstdio>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "network/send_all.h"
 #include "resp_value/resp_value.h"
@@ -34,8 +39,8 @@ void SenderWorker(const int sock) {
     RespValue message = Array(resp_values);
     std::string serialised_message = message.Serialize();
 
-    if (SendAll(sock, serialised_message.c_str(), serialised_message.size(),
-                0) != serialised_message.size()) {
+    if (SendAll(sock, serialised_message, 0) !=
+        static_cast<ssize_t>(serialised_message.size())) {
       // SendAll was not successful
       return;
     }

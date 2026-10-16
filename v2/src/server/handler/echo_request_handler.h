@@ -16,6 +16,7 @@ class EchoRequestHandler final : public Handler {
 
   [[nodiscard]] RespValue Handle(const RespValue& request) override {
     const std::optional<Command> command = ParseCommand(request);
+    if (!command || command->args.size() != 1) return Error("ERR syntax error");
     return BulkString(command->args[0]);
   }
 };

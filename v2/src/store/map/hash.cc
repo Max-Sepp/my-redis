@@ -1,6 +1,8 @@
 #include "store/map/hash.h"
 
+#include <cstddef>
 #include <functional>
+#include <string>
 
 namespace myredis {
 
