@@ -23,12 +23,8 @@ namespace {
 constexpr std::size_t kMaxEvents = 64;
 
 // Records are packed back to back, so headers may be unaligned; hence memcpy.
-void WriteRecord(const std::span<std::byte> slot, const InboxHeader& header,
-                 const std::string_view payload) {
+void WriteHeader(const std::span<std::byte> slot, const InboxHeader& header) {
   std::memcpy(slot.data(), &header, sizeof(header));
-  if (!payload.empty()) {
-    std::memcpy(slot.data() + sizeof(header), payload.data(), payload.size());
-  }
 }
 
 InboxHeader ReadHeader(const std::byte* record) {
@@ -76,27 +72,59 @@ void IoThread::Stop() {
 }
 
 void IoThread::PostAssign(int client_fd) {
-  PostRecord(InboxRecordType::kAssignConnection, client_fd, {});
+  assert(!writer_open_);
+  const std::span<std::byte> slot = WaitForInboxSlot(0);
+  WriteHeader(slot, {.type = InboxRecordType::kAssignConnection,
+                     .fd = client_fd,
+                     .length = 0});
+  inbox_.Commit(sizeof(InboxHeader));
+  inbox_event_.Notify();
+}
+
+IoThread::ResponseWriter IoThread::BeginResponse(int client_fd) {
+  return {*this, client_fd};
 }
 
 void IoThread::PostResponse(int client_fd, std::string_view bytes) {
-  PostRecord(InboxRecordType::kWriteResponse, client_fd, bytes);
+  BeginResponse(client_fd).Append(bytes);
 }
 
-void IoThread::PostRecord(const InboxRecordType type, const int client_fd,
-                          std::string_view payload) {
-  do {
-    const std::span<std::byte> slot = WaitForInboxSlot(payload.size());
-    const std::size_t chunk_size = slot.size() - sizeof(InboxHeader);
-    WriteRecord(slot,
-                {.type = type,
-                 .fd = client_fd,
-                 .length = static_cast<std::uint32_t>(chunk_size)},
-                payload.substr(0, chunk_size));
-    inbox_.Commit(slot.size());
-    inbox_event_.Notify();
-    payload.remove_prefix(chunk_size);
-  } while (!payload.empty());
+IoThread::ResponseWriter::ResponseWriter(IoThread& owner, const int client_fd)
+    : owner_(owner), client_fd_(client_fd) {
+  assert(!owner_.writer_open_);
+  owner_.writer_open_ = true;
+}
+
+void IoThread::ResponseWriter::Append(std::string_view bytes) {
+  while (!bytes.empty()) {
+    // Reserve all the free space so later appends fill the same record.
+    if (slot_.empty()) slot_ = owner_.WaitForInboxSlot(kInboxBytes);
+    const std::size_t room = slot_.size() - sizeof(InboxHeader) - used_;
+    const std::size_t count = std::min(room, bytes.size());
+    std::memcpy(slot_.data() + sizeof(InboxHeader) + used_, bytes.data(),
+                count);
+    used_ += count;
+    bytes.remove_prefix(count);
+    if (used_ + sizeof(InboxHeader) == slot_.size()) CommitRecord();
+  }
+}
+
+void IoThread::ResponseWriter::Finish() {
+  CommitRecord();
+  owner_.writer_open_ = false;
+}
+
+void IoThread::ResponseWriter::CommitRecord() {
+  // A reservation is only opened to write bytes, so an open one is never empty.
+  if (slot_.empty()) return;
+  // The payload is already in place; only its length was unknown until now.
+  WriteHeader(slot_, {.type = InboxRecordType::kWriteResponse,
+                      .fd = client_fd_,
+                      .length = static_cast<std::uint32_t>(used_)});
+  owner_.inbox_.Commit(sizeof(InboxHeader) + used_);
+  owner_.inbox_event_.Notify();
+  slot_ = {};
+  used_ = 0;
 }
 
 std::span<std::byte> IoThread::WaitForInboxSlot(

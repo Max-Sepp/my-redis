@@ -18,7 +18,6 @@
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <string>
 #include <thread>
 #include <utility>
 #include <variant>
@@ -231,22 +230,23 @@ void Server::ProcessCommands() {
 }
 
 void Server::ExecuteAndRespond(const CommandBatch& batch) {
-  // Execute the whole pipelined batch and concatenate the replies, then hand
-  // them back in a single PostResponse. Commands still run even if the client
-  // has since disconnected (their store side effects must persist); we only
-  // skip the write-back in that case.
-  std::string response;
-  for (const RespValue& value : batch.values) {
-    response += Execute(value);
+  // Execute the whole pipelined batch, serializing each reply straight into
+  // the IO thread's inbox. Commands still run even if the client has since
+  // disconnected (their store side effects must persist); we only skip the
+  // write-back in that case.
+  const auto iter = fd_to_thread_.find(batch.fd);
+  if (iter == fd_to_thread_.end()) {
+    for (const RespValue& value : batch.values) {
+      static_cast<void>(dispatcher_.Dispatch(value));
+    }
+    return;
   }
 
-  const auto iter = fd_to_thread_.find(batch.fd);
-  if (iter == fd_to_thread_.end()) return;  // client disconnected meanwhile
-  io_threads_[iter->second]->PostResponse(batch.fd, response);
-}
-
-std::string Server::Execute(const RespValue& request) {
-  return dispatcher_.Dispatch(request).Serialize();
+  IoThread::ResponseWriter writer =
+      io_threads_[iter->second]->BeginResponse(batch.fd);
+  for (const RespValue& value : batch.values) {
+    dispatcher_.Dispatch(value).SerializeTo(writer);
+  }
 }
 
 void Server::CreateSnapshot() {

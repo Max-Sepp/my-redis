@@ -3,10 +3,18 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
 namespace myredis {
+
+// Destination for serialized bytes, so callers choose where they land.
+class ByteSink {
+ public:
+  virtual ~ByteSink() = default;
+  virtual void Append(std::string_view bytes) = 0;
+};
 
 class RespValue {
  public:
@@ -21,6 +29,9 @@ class RespValue {
                                    RespInteger, RespBulkString, RespArray>;
 
   [[nodiscard]] std::string Serialize() const;
+  // Appends the serialized bytes to `sink` piece by piece, with no
+  // intermediate strings.
+  void SerializeTo(ByteSink& sink) const;
   [[nodiscard]] const RespVariant& GetValue() const;
   [[nodiscard]] std::string Show() const;
 

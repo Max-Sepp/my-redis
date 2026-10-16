@@ -1,7 +1,10 @@
 #include "resp_value.h"
 
+#include <array>
 #include <cassert>
 #include <charconv>
+#include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
@@ -9,6 +12,35 @@
 namespace myredis {
 
 namespace {
+
+struct StringSink : ByteSink {
+  void Append(const std::string_view piece) override { bytes.append(piece); }
+  std::string bytes;
+};
+
+// The RESP type bytes that are followed by a decimal and CRLF.
+enum class LinePrefix : char {
+  kInteger = ':',
+  kBulkLength = '$',
+  kArrayLength = '*',
+};
+
+// A sign plus digits10 + 1 digits covers every long long.
+constexpr std::size_t kMaxDecimalLength =
+    std::numeric_limits<long long>::digits10 + 2;
+
+// Appends `<prefix><number>\r\n` without allocating.
+void AppendLine(ByteSink& sink, const LinePrefix prefix,
+                const long long number) {
+  std::array<char, 1 + kMaxDecimalLength + 2> buf{};
+  buf[0] = static_cast<char>(prefix);
+  const auto [end, ec] =
+      std::to_chars(buf.data() + 1, buf.data() + buf.size() - 2, number);
+  assert(ec == std::errc());
+  end[0] = '\r';
+  end[1] = '\n';
+  sink.Append({buf.data(), static_cast<std::size_t>(end + 2 - buf.data())});
+}
 
 // Wraps a parsed alternative in a RespVariant, selecting the alternative
 // explicitly. Returning the optional directly is wrong for
@@ -163,30 +195,44 @@ std::optional<RespValue::RespArray> RespValue::ParseArray(
 }
 
 std::string RespValue::Serialize() const {
-  return std::visit(
-      []<typename RespVariant>(const RespVariant& val) -> std::string {
+  StringSink sink;
+  SerializeTo(sink);
+  return std::move(sink.bytes);
+}
+
+void RespValue::SerializeTo(ByteSink& sink) const {
+  std::visit(
+      [&sink]<typename RespVariant>(const RespVariant& val) {
         using T = std::decay_t<RespVariant>;
 
         if constexpr (std::is_same_v<T, RespSimpleString>) {
-          return "+" + val + "\r\n";
+          sink.Append("+");
+          sink.Append(val);
+          sink.Append("\r\n");
         } else if constexpr (std::is_same_v<T, RespSimpleError>) {
-          return "-" + val.message + "\r\n";
+          sink.Append("-");
+          sink.Append(val.message);
+          sink.Append("\r\n");
         } else if constexpr (std::is_same_v<T, RespInteger>) {
-          return ":" + std::to_string(val) + "\r\n";
+          AppendLine(sink, LinePrefix::kInteger, val);
         } else if constexpr (std::is_same_v<T, RespBulkString>) {
           if (!val.has_value()) {
-            return "$-1\r\n";
+            sink.Append("$-1\r\n");
+            return;
           }
-          const std::string& str = val.value();
-          return "$" + std::to_string(str.length()) + "\r\n" + str + "\r\n";
+          AppendLine(sink, LinePrefix::kBulkLength,
+                     static_cast<long long>(val->length()));
+          sink.Append(*val);
+          sink.Append("\r\n");
         } else if constexpr (std::is_same_v<T, RespArray>) {
-          std::string result = "*" + std::to_string(val.size()) + "\r\n";
+          AppendLine(sink, LinePrefix::kArrayLength,
+                     static_cast<long long>(val.size()));
           for (const auto& element : val) {
-            result += element.Serialize();
+            element.SerializeTo(sink);
           }
-          return result;
+        } else {
+          throw std::invalid_argument("Resp Value variant not a valid variant");
         }
-        throw std::invalid_argument("Resp Value variant not a valid variant");
       },
       value_);
 }

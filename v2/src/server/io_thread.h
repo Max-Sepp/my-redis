@@ -13,6 +13,7 @@
 #include "concurrent/backpressure_queue.h"
 #include "concurrent/batched_ring_buffer.h"
 #include "concurrent/event_fd.h"
+#include "resp_value/resp_value.h"
 #include "server/connection.h"
 #include "server/messages.h"
 
@@ -25,7 +26,7 @@ namespace myredis {
 //
 // Concurrency contract:
 //   - inbox_  is an SPSC byte ring of InboxHeader-framed records: the main
-//     thread is the sole producer (via PostAssign / PostResponse), this IO
+//     thread is the sole producer (via PostAssign / BeginResponse), this IO
 //     thread is the sole consumer and pops everything pending as one batch.
 //   - outbox_ is SPSC: this IO thread is the sole producer, the main thread is
 //     the sole consumer (via GetOutboxMsg).
@@ -60,10 +61,39 @@ class IoThread {
 
   // --- Called from the main thread only -------------------------------------
 
+  // Streams response bytes for one client straight into inbox_, splitting
+  // them across records when the free space runs out. The IO thread sees the
+  // bytes once a record fills or the writer is finished or destroyed.
+  class ResponseWriter : public ByteSink {
+   public:
+    ResponseWriter(const ResponseWriter&) = delete;
+    ResponseWriter& operator=(const ResponseWriter&) = delete;
+    ~ResponseWriter() override { Finish(); }
+
+    void Append(std::string_view bytes) override;
+    // Publishes any bytes not yet handed to the IO thread.
+    void Finish();
+
+   private:
+    friend class IoThread;
+    ResponseWriter(IoThread& owner, int client_fd);
+    // Publishes the open reservation as one record, if there is one.
+    void CommitRecord();
+
+    IoThread& owner_;
+    int client_fd_;
+    std::span<std::byte> slot_;  // the open reservation, empty if none
+    std::size_t used_ = 0;       // payload bytes written into slot_
+  };
+
   // Hand a freshly accepted client fd to this thread.
   void PostAssign(int client_fd);
-  // Hand response bytes destined for `client_fd` (owned by this thread). The
-  // bytes are copied into inbox_, so they need not outlive the call.
+  // Open a writer for response bytes destined for `client_fd` (owned by this
+  // thread). Only one writer may be open at a time, and PostAssign must not be
+  // called while it is.
+  ResponseWriter BeginResponse(int client_fd);
+  // Hand response bytes destined for `client_fd`. The bytes are copied into
+  // inbox_, so they need not outlive the call.
   void PostResponse(int client_fd, std::string_view bytes);
 
   // Pop the next IO -> main message, or std::nullopt if none are pending. The
@@ -75,10 +105,7 @@ class IoThread {
  private:
   void Run();
 
-  // Splits `payload` across several records if it does not fit in the free
-  // space. Main thread only.
-  void PostRecord(InboxRecordType type, int client_fd,
-                  std::string_view payload);
+  // Main thread only.
   std::span<std::byte> WaitForInboxSlot(std::size_t payload_size);
 
   // Inbox handling (main -> this thread).
@@ -112,6 +139,7 @@ class IoThread {
   EventFd inbox_event_;  // main -> this thread wakeup
 
   BatchRingBuffer<std::byte, kInboxBytes> inbox_;
+  bool writer_open_ = false;  // main thread only
   BackpressureQueue<OutboxMsg, kQueueCapacity> outbox_;
   // True while client sockets are registered without EPOLLIN.
   bool reading_paused_ = false;
