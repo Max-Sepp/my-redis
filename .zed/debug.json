@@ -1,0 +1,54 @@
+[
+  {
+    "label": "v2: my_redis_server",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/build/v2/debug/my_redis_server",
+    "args": [],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "build": {
+      "command": "make",
+      "args": ["v2-debug"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    }
+  },
+  {
+    "label": "v2: my_redis_client",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/build/v2/debug/my_redis_client",
+    "args": [],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "build": {
+      "command": "make",
+      "args": ["v2-debug"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    }
+  },
+  {
+    "label": "v2: parser_tests",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/build/v2/debug/parser_tests",
+    "args": [],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "build": {
+      "command": "make",
+      "args": ["v2-debug"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    }
+  },
+  {
+    "label": "v2: store_tests",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/build/v2/debug/store_tests",
+    "args": [],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "build": {
+      "command": "make",
+      "args": ["v2-debug"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    }
+  }
+]
