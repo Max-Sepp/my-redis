@@ -16,6 +16,7 @@ set(RESP_VALUE_SOURCES
         src/resp_value/resp_value.cc
         src/resp_value/resp_value_queue.cc
         src/resp_value/resp_values.cc
+        src/resp_value/resp_writer.cc
 )
 
 set(NETWORK_SOURCES
@@ -84,6 +85,7 @@ if (BUILD_TESTS)
     add_executable(parser_tests
             tests/parser_tests.cc
             src/resp_value/resp_value.cc
+            src/resp_value/resp_writer.cc
     )
 
     # Link the test executable against Google Test

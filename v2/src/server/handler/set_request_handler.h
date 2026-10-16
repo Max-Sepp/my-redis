@@ -6,7 +6,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -25,10 +25,10 @@ class SetRequestHandler final : public Handler {
            command->args[0].has_value() && !command->args[0]->empty();
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     store_->Set(*command->args[0], command->args[1]);
-    return SimpleString("OK");
+    out.SimpleString("OK");
   }
 
  private:

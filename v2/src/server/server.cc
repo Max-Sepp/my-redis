@@ -18,6 +18,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <variant>
@@ -41,6 +42,11 @@ constexpr long nanosecondsInMillisecond = 1000000;
 // restore logic from there.
 constexpr const char* kSnapshotDir = ".";
 constexpr const char* kSnapshotPrefix = "dump-";
+
+// Swallows replies for clients that disconnected before their batch ran.
+struct DiscardSink : ByteSink {
+  void Append(std::string_view /*bytes*/) override {}
+};
 
 // Creates a non-blocking TCP socket bound to `port` and listening on all
 // interfaces. Returns the fd, or -1 on failure (with a message on std::cerr).
@@ -236,16 +242,19 @@ void Server::ExecuteAndRespond(const CommandBatch& batch) {
   // write-back in that case.
   const auto iter = fd_to_thread_.find(batch.fd);
   if (iter == fd_to_thread_.end()) {
+    DiscardSink discard;
+    RespWriter out(discard);
     for (const RespValue& value : batch.values) {
-      static_cast<void>(dispatcher_.Dispatch(value));
+      dispatcher_.Dispatch(value, out);
     }
     return;
   }
 
   IoThread::ResponseWriter writer =
       io_threads_[iter->second]->BeginResponse(batch.fd);
+  RespWriter out(writer);
   for (const RespValue& value : batch.values) {
-    dispatcher_.Dispatch(value).SerializeTo(writer);
+    dispatcher_.Dispatch(value, out);
   }
 }
 

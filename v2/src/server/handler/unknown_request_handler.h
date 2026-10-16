@@ -2,7 +2,7 @@
 #define MYREDIS_SERVER_HANDLER_UNKNOWN_REQUEST_HANDLER_H_
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/handler.h"
 
 namespace myredis {
@@ -15,8 +15,8 @@ class UnknownRequestHandler final : public Handler {
     return true;
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& /*request*/) override {
-    return Error("Unknown subcommand or command");
+  void Handle(const RespValue& /*request*/, RespWriter& out) override {
+    out.Error("Unknown subcommand or command");
   }
 };
 

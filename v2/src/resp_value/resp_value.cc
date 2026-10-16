@@ -1,10 +1,7 @@
 #include "resp_value.h"
 
-#include <array>
 #include <cassert>
 #include <charconv>
-#include <cstddef>
-#include <limits>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
@@ -17,30 +14,6 @@ struct StringSink : ByteSink {
   void Append(const std::string_view piece) override { bytes.append(piece); }
   std::string bytes;
 };
-
-// The RESP type bytes that are followed by a decimal and CRLF.
-enum class LinePrefix : char {
-  kInteger = ':',
-  kBulkLength = '$',
-  kArrayLength = '*',
-};
-
-// A sign plus digits10 + 1 digits covers every long long.
-constexpr std::size_t kMaxDecimalLength =
-    std::numeric_limits<long long>::digits10 + 2;
-
-// Appends `<prefix><number>\r\n` without allocating.
-void AppendLine(ByteSink& sink, const LinePrefix prefix,
-                const long long number) {
-  std::array<char, 1 + kMaxDecimalLength + 2> buf{};
-  buf[0] = static_cast<char>(prefix);
-  const auto [end, ec] =
-      std::to_chars(buf.data() + 1, buf.data() + buf.size() - 2, number);
-  assert(ec == std::errc());
-  end[0] = '\r';
-  end[1] = '\n';
-  sink.Append({buf.data(), static_cast<std::size_t>(end + 2 - buf.data())});
-}
 
 // Wraps a parsed alternative in a RespVariant, selecting the alternative
 // explicitly. Returning the optional directly is wrong for
@@ -201,34 +174,31 @@ std::string RespValue::Serialize() const {
 }
 
 void RespValue::SerializeTo(ByteSink& sink) const {
+  RespWriter writer(sink);
+  WriteTo(writer);
+}
+
+void RespValue::WriteTo(RespWriter& writer) const {
   std::visit(
-      [&sink]<typename RespVariant>(const RespVariant& val) {
+      [&writer]<typename RespVariant>(const RespVariant& val) {
         using T = std::decay_t<RespVariant>;
 
         if constexpr (std::is_same_v<T, RespSimpleString>) {
-          sink.Append("+");
-          sink.Append(val);
-          sink.Append("\r\n");
+          writer.SimpleString(val);
         } else if constexpr (std::is_same_v<T, RespSimpleError>) {
-          sink.Append("-");
-          sink.Append(val.message);
-          sink.Append("\r\n");
+          writer.Error(val.message);
         } else if constexpr (std::is_same_v<T, RespInteger>) {
-          AppendLine(sink, LinePrefix::kInteger, val);
+          writer.Integer(val);
         } else if constexpr (std::is_same_v<T, RespBulkString>) {
           if (!val.has_value()) {
-            sink.Append("$-1\r\n");
+            writer.NullBulkString();
             return;
           }
-          AppendLine(sink, LinePrefix::kBulkLength,
-                     static_cast<long long>(val->length()));
-          sink.Append(*val);
-          sink.Append("\r\n");
+          writer.BulkString(*val);
         } else if constexpr (std::is_same_v<T, RespArray>) {
-          AppendLine(sink, LinePrefix::kArrayLength,
-                     static_cast<long long>(val.size()));
+          writer.ArrayHeader(val.size());
           for (const auto& element : val) {
-            element.SerializeTo(sink);
+            element.WriteTo(writer);
           }
         } else {
           throw std::invalid_argument("Resp Value variant not a valid variant");

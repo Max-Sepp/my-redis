@@ -7,7 +7,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -30,12 +30,12 @@ class TtlRequestHandler final : public Handler {
            !command->args[0]->empty();
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     const std::int64_t result = store_->Ttl(*command->args[0]);
     // -1 (no TTL) and -2 (no key) are sentinels, not durations — don't
     // convert them.
-    return Integer(result < 0 ? result : result / time_conversion_factor_);
+    out.Integer(result < 0 ? result : result / time_conversion_factor_);
   }
 
  private:

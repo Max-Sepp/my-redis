@@ -6,7 +6,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -27,10 +27,10 @@ class PersistRequestHandler final : public Handler {
            !command->args[0]->empty();
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     const bool persisted = store_->Persist(*command->args[0]);
-    return Integer(persisted ? 1 : 0);
+    out.Integer(persisted ? 1 : 0);
   }
 
  private:

@@ -2,7 +2,7 @@
 #define MYREDIS_SERVER_HANDLER_PING_REQUEST_HANDLER_H_
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 
@@ -15,12 +15,18 @@ class PingRequestHandler final : public Handler {
            (command->args.size() == 0 || command->args.size() == 1);
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     if (command->args.size() == 0) {
-      return SimpleString("PONG");
+      out.SimpleString("PONG");
+      return;
     }
-    return BulkString(command->args[0]);
+    const std::optional<std::string>& arg = command->args[0];
+    if (!arg.has_value()) {
+      out.NullBulkString();
+      return;
+    }
+    out.BulkString(*arg);
   }
 };
 

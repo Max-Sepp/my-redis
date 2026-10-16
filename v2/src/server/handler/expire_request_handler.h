@@ -8,7 +8,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -42,7 +42,7 @@ class ExpireRequestHandler final : public Handler {
             Store::ToExpireOption(*command->args[2]).has_value());
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     const int64_t value = *ParseInteger(command->args[1]);
     const Store::ExpireOption option =
@@ -52,7 +52,7 @@ class ExpireRequestHandler final : public Handler {
     const int64_t proposed_expiry = base + (value * time_conversion_factor_);
     const bool set =
         store_->ExpireAt(*command->args[0], proposed_expiry, option);
-    return Integer(set ? 1 : 0);
+    out.Integer(set ? 1 : 0);
   }
 
  private:

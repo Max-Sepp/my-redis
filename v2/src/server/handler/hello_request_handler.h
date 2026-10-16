@@ -2,7 +2,7 @@
 #define MYREDIS_SERVER_HANDLER_HELLO_REQUEST_HANDLER_H_
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 
@@ -18,26 +18,26 @@ class HelloRequestHandler final : public Handler {
     return command && command->name == "HELLO" && command->args.size() <= 1;
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     if (command->args.size() == 1 && command->args[0] != "2") {
-      return Error(
-          "NOPROTO unsupported protocol version");
+      out.Error("NOPROTO unsupported protocol version");
+      return;
     }
-    return Array({
-        BulkString("server"),
-        BulkString("myredis"),
-        BulkString("version"),
-        BulkString("0.1.0"),
-        BulkString("proto"),
-        Integer(2),
-        BulkString("mode"),
-        BulkString("standalone"),
-        BulkString("role"),
-        BulkString("master"),
-        BulkString("modules"),
-        Array({}),
-    });
+    // Six key/value pairs.
+    out.ArrayHeader(12);
+    out.BulkString("server");
+    out.BulkString("myredis");
+    out.BulkString("version");
+    out.BulkString("0.1.0");
+    out.BulkString("proto");
+    out.Integer(2);
+    out.BulkString("mode");
+    out.BulkString("standalone");
+    out.BulkString("role");
+    out.BulkString("master");
+    out.BulkString("modules");
+    out.ArrayHeader(0);
   }
 };
 
