@@ -6,7 +6,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -26,12 +26,15 @@ class PersistRequestHandler final : public Handler {
            KeyArg(*command, 0) != nullptr;
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     const std::string* key = command ? KeyArg(*command, 0) : nullptr;
-    if (key == nullptr) return Error("ERR syntax error");
+    if (key == nullptr) {
+      out.Error("ERR syntax error");
+      return;
+    }
     const bool persisted = store_->Persist(*key);
-    return Integer(persisted ? 1 : 0);
+    out.Integer(persisted ? 1 : 0);
   }
 
  private:

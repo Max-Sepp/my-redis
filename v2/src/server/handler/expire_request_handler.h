@@ -6,9 +6,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
+#include <utility>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -41,18 +43,24 @@ class ExpireRequestHandler final : public Handler {
            ParseOption(*command).has_value();
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
-    if (!command || command->args.size() < 2) return Error("ERR syntax error");
+    if (!command || command->args.size() < 2) {
+      out.Error("ERR syntax error");
+      return;
+    }
     const std::string* key = KeyArg(*command, 0);
     const std::optional<int64_t> value = ParseInteger(command->args[1]);
     const std::optional<Store::ExpireOption> option = ParseOption(*command);
-    if (key == nullptr || !value || !option) return Error("ERR syntax error");
+    if (key == nullptr || !value || !option) {
+      out.Error("ERR syntax error");
+      return;
+    }
 
     const int64_t base = relative_to_now_ ? store_->NowMs() : 0;
     const int64_t proposed_expiry = base + (*value * time_conversion_factor_);
     const bool set = store_->ExpireAt(*key, proposed_expiry, *option);
-    return Integer(set ? 1 : 0);
+    out.Integer(set ? 1 : 0);
   }
 
  private:

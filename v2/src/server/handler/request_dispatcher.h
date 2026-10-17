@@ -5,12 +5,13 @@
 #include <vector>
 
 #include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
 
 namespace myredis {
 
-// Routes a parsed request to the first handler that claims it and returns the
+// Routes a parsed request to the first handler that claims it, which writes the
 // response. Takes ownership of the command store, which the handlers reference;
 // the store is injected so the dispatcher stays decoupled from any concrete
 // Map.
@@ -24,9 +25,9 @@ class RequestDispatcher {
   RequestDispatcher(const RequestDispatcher&) = delete;
   RequestDispatcher& operator=(const RequestDispatcher&) = delete;
 
-  // Executes `request` and returns the response. The chain always ends in an
-  // UnknownRequestHandler, so this always produces a value.
-  [[nodiscard]] RespValue Dispatch(const RespValue& request) const;
+  // Executes `request` and writes the response to `out`. The chain always ends
+  // in an UnknownRequestHandler, so this always writes exactly one value.
+  void Dispatch(const RespValue& request, RespWriter& out) const;
 
  private:
   // Declared before `handlers_` so it outlives the handlers that reference it.

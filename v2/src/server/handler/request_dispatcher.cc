@@ -1,10 +1,9 @@
 #include "server/handler/request_dispatcher.h"
 
 #include <memory>
-#include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/del_request_handler.h"
 #include "server/handler/echo_request_handler.h"
 #include "server/handler/expire_request_handler.h"
@@ -54,14 +53,16 @@ RequestDispatcher::RequestDispatcher(const std::unique_ptr<Store>& store)
   handlers_.push_back(std::make_unique<UnknownRequestHandler>());
 }
 
-RespValue RequestDispatcher::Dispatch(const RespValue& request) const {
+void RequestDispatcher::Dispatch(const RespValue& request,
+                                 RespWriter& out) const {
   for (const auto& handler : handlers_) {
     if (handler->IsHandler(request)) {
-      return handler->Handle(request);
+      handler->Handle(request, out);
+      return;
     }
   }
   // Unreachable: UnknownRequestHandler always matches.
-  return Error("Unknown subcommand or command");
+  out.Error("Unknown subcommand or command");
 }
 
 }  // namespace myredis

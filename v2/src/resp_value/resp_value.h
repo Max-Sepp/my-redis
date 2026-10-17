@@ -1,10 +1,15 @@
 #ifndef MYREDIS_RESP_VALUE_RESP_VALUE_H_
 #define MYREDIS_RESP_VALUE_RESP_VALUE_H_
 
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
+
+#include "resp_value/byte_sink.h"
+#include "resp_value/resp_writer.h"
 
 namespace myredis {
 
@@ -21,6 +26,10 @@ class RespValue {
                                    RespInteger, RespBulkString, RespArray>;
 
   [[nodiscard]] std::string Serialize() const;
+  // Appends the serialized bytes to `sink` piece by piece, with no
+  // intermediate strings.
+  void SerializeTo(ByteSink& sink) const;
+  void WriteTo(RespWriter& writer) const;
   [[nodiscard]] const RespVariant& GetValue() const;
   [[nodiscard]] std::string Show() const;
 

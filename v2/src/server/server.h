@@ -1,8 +1,8 @@
 #ifndef MYREDIS_SERVER_SERVER_H_
 #define MYREDIS_SERVER_SERVER_H_
 
+#include <cstddef>
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -50,10 +50,6 @@ class Server {
   // Reaps a finished snapshot child (identified by its pidfd) and stops
   // watching it.
   void ReapSnapshot(int pidfd);
-
-  // Executes a single request via the dispatcher and returns the serialized
-  // response bytes.
-  std::string Execute(const RespValue& request);
 
   // The store the dispatcher and its handlers reference. Declared before
   // `dispatcher_` so it is constructed first: the dispatcher binds a reference

@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <variant>
 
+#include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
 
 using myredis::RespValue;
@@ -377,4 +381,32 @@ TEST(RespSerializeTests, ArrayWithElements) {
       RespValue::RespBulkString(std::make_optional<std::string>("bar"))));
   const RespValue value = RespValue::FromVariant(arr);
   EXPECT_EQ(value.Serialize(), "*3\r\n+foo\r\n:123\r\n$3\r\nbar\r\n");
+}
+
+TEST(RespSerializeTests, IntegerExtremes) {
+  EXPECT_EQ(
+      RespValue::FromVariant(std::numeric_limits<long long>::min()).Serialize(),
+      ":-9223372036854775808\r\n");
+  EXPECT_EQ(
+      RespValue::FromVariant(std::numeric_limits<long long>::max()).Serialize(),
+      ":9223372036854775807\r\n");
+}
+
+TEST(RespSerializeTests, NestedArray) {
+  const RespValue inner = RespValue::FromVariant(RespValue::RespArray{
+      RespValue::FromVariant(RespValue::RespBulkString(std::nullopt))});
+  const RespValue value = RespValue::FromVariant(
+      RespValue::RespArray{inner, RespValue::FromString("+ok\r\n")->first});
+  EXPECT_EQ(value.Serialize(), "*2\r\n*1\r\n$-1\r\n+ok\r\n");
+}
+
+// SerializeTo appends to whatever the sink already holds.
+TEST(RespSerializeTests, SerializeToAppendsToSink) {
+  struct CollectingSink : myredis::ByteSink {
+    void Append(const std::string_view bytes) override { out.append(bytes); }
+    std::string out = "prefix:";
+  };
+  CollectingSink sink;
+  RespValue::FromVariant(RespValue::RespBulkString("hi")).SerializeTo(sink);
+  EXPECT_EQ(sink.out, "prefix:$2\r\nhi\r\n");
 }

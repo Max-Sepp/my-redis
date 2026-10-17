@@ -1,7 +1,7 @@
 #ifndef MYREDIS_SERVER_MESSAGES_H_
 #define MYREDIS_SERVER_MESSAGES_H_
 
-#include <string>
+#include <cstdint>
 #include <variant>
 #include <vector>
 
@@ -9,22 +9,24 @@
 
 namespace myredis {
 
-// Messages flowing main -> IO thread (carried on the IO thread's `inbox_`).
+// Messages flowing main -> IO thread. Each is a record in the IO thread's
+// `inbox_` byte ring: an InboxHeader followed by `length` payload bytes.
 
-// The main thread accepted a new client and assigned it to this IO thread,
-// which should take ownership of the fd (epoll ADD + create Connection state).
-struct AssignConnection {
-  int fd = -1;
+enum class InboxRecordType : std::uint8_t {
+  // The main thread accepted a new client and assigned it to this IO thread,
+  // which should take ownership of the fd (epoll ADD + create Connection
+  // state). No payload.
+  kAssignConnection,
+  // Response bytes for a client owned by this IO thread, which should buffer
+  // and write the payload to `fd`. A long response may span several records.
+  kWriteResponse,
 };
 
-// The main thread produced a response for a client owned by this IO thread,
-// which should buffer and write `bytes` to `fd`.
-struct WriteResponse {
-  int fd = -1;
-  std::string bytes;
+struct InboxHeader {
+  InboxRecordType type;
+  int fd;
+  std::uint32_t length;  // payload bytes following the header
 };
-
-using InboxMsg = std::variant<AssignConnection, WriteResponse>;
 
 // Messages flowing IO thread -> main thread (carried on the IO thread's
 // `outbox_`).

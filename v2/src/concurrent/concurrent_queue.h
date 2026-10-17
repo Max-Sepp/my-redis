@@ -2,6 +2,7 @@
 #define MYREDIS_CONCURRENT_CONCURRENT_QUEUE_H_
 
 #include <condition_variable>
+#include <mutex>
 #include <queue>
 
 namespace myredis {

@@ -19,12 +19,14 @@
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <variant>
 
+#include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
 #include "store/store.h"
@@ -47,6 +49,11 @@ constexpr long nanosecondsInMillisecond = 1000000;
 // restore logic from there.
 constexpr const char* kSnapshotDir = ".";
 constexpr const char* kSnapshotPrefix = "dump-";
+
+// Swallows replies for clients that disconnected before their batch ran.
+struct DiscardSink : ByteSink {
+  void Append(std::string_view /*bytes*/) override {}
+};
 
 // Creates a non-blocking TCP socket bound to `port` and listening on all
 // interfaces. Returns the fd, or -1 on failure (with a message on std::cerr).
@@ -236,22 +243,26 @@ void Server::ProcessCommands() {
 }
 
 void Server::ExecuteAndRespond(const CommandBatch& batch) {
-  // Execute the whole pipelined batch and concatenate the replies, then hand
-  // them back in a single PostResponse. Commands still run even if the client
-  // has since disconnected (their store side effects must persist); we only
-  // skip the write-back in that case.
-  std::string response;
-  for (const RespValue& value : batch.values) {
-    response += Execute(value);
+  // Execute the whole pipelined batch, serializing each reply straight into
+  // the IO thread's inbox. Commands still run even if the client has since
+  // disconnected (their store side effects must persist); we only skip the
+  // write-back in that case.
+  const auto iter = fd_to_thread_.find(batch.fd);
+  if (iter == fd_to_thread_.end()) {
+    DiscardSink discard;
+    RespWriter out(discard);
+    for (const RespValue& value : batch.values) {
+      dispatcher_.Dispatch(value, out);
+    }
+    return;
   }
 
-  const auto iter = fd_to_thread_.find(batch.fd);
-  if (iter == fd_to_thread_.end()) return;  // client disconnected meanwhile
-  io_threads_[iter->second]->PostResponse(batch.fd, std::move(response));
-}
-
-std::string Server::Execute(const RespValue& request) {
-  return dispatcher_.Dispatch(request).Serialize();
+  IoThread::ResponseWriter writer =
+      io_threads_[iter->second]->BeginResponse(batch.fd);
+  RespWriter out(writer);
+  for (const RespValue& value : batch.values) {
+    dispatcher_.Dispatch(value, out);
+  }
 }
 
 void Server::CreateSnapshot() {

@@ -2,6 +2,7 @@
 #define MYREDIS_SERVER_HANDLER_HANDLER_H_
 
 #include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 
 namespace myredis {
 
@@ -9,15 +10,15 @@ namespace myredis {
 // order, asking each whether it handles a given request; the first match
 // produces the response.
 //
-// A handler returns the response RespValue rather than writing to a socket.
-// Command execution is single-threaded, so handlers run without locking; the
-// returned value is serialized and routed back to the owning IO thread.
+// A handler encodes its response into `out` rather than writing to a socket or
+// building a RespValue. Command execution is single-threaded, so handlers run
+// without locking; `out` streams the bytes back to the owning IO thread.
 class Handler {
  public:
   virtual ~Handler() = default;
 
   [[nodiscard]] virtual bool IsHandler(const RespValue& request) const = 0;
-  [[nodiscard]] virtual RespValue Handle(const RespValue& request) = 0;
+  virtual void Handle(const RespValue& request, RespWriter& out) = 0;
 };
 
 }  // namespace myredis
