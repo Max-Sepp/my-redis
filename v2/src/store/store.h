@@ -1,10 +1,12 @@
 #ifndef MYREDIS_STORE_STORE_H_
 #define MYREDIS_STORE_STORE_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "store/map/map.h"
 #include "time/time.h"

@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <concepts>
+#include <cstddef>
 #include <optional>
 #include <utility>
 

@@ -1,6 +1,7 @@
 #ifndef MYREDIS_SERVER_SERVER_H_
 #define MYREDIS_SERVER_SERVER_H_
 
+#include <cstddef>
 #include <memory>
 #include <unordered_map>
 #include <vector>

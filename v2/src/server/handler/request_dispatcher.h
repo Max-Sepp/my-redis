@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "resp_value/resp_value.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
 
