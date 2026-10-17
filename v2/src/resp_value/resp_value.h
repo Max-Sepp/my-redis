@@ -1,8 +1,10 @@
 #ifndef MYREDIS_RESP_VALUE_RESP_VALUE_H_
 #define MYREDIS_RESP_VALUE_RESP_VALUE_H_
 
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 

@@ -2,6 +2,7 @@
 #define MYREDIS_SERVER_HANDLER_HELLO_REQUEST_HANDLER_H_
 
 #include <cstddef>
+#include <optional>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"

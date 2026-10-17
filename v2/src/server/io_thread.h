@@ -15,7 +15,6 @@
 #include "concurrent/batched_ring_buffer.h"
 #include "concurrent/event_fd.h"
 #include "resp_value/byte_sink.h"
-#include "resp_value/resp_value.h"
 #include "server/connection.h"
 #include "server/messages.h"
 

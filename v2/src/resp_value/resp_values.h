@@ -1,6 +1,10 @@
 #ifndef MYREDIS_RESP_VALUE_RESP_VALUES_H_
 #define MYREDIS_RESP_VALUE_RESP_VALUES_H_
 
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "resp_value.h"
 
 namespace myredis {

@@ -1,6 +1,9 @@
 #ifndef MYREDIS_SERVER_HANDLER_PING_REQUEST_HANDLER_H_
 #define MYREDIS_SERVER_HANDLER_PING_REQUEST_HANDLER_H_
 
+#include <optional>
+#include <string>
+
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
