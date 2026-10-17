@@ -24,6 +24,21 @@ namespace myredis {
 // A single-producer single-consumer ring buffer of up to M elements, popped in
 // contiguous batches. The storage is mapped twice back to back, so a batch
 // that wraps past the end is still contiguous through the second mapping.
+//
+// Layout, e.g. with slot_count_ = 8 and a batch of 4 starting at slot 6:
+//
+//   data_                   data_ + slot_count_
+//   v first mapping         v second mapping
+//   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//   | 0| 1| 2| 3| 4| 5| 6| 7| 0| 1| 2| 3| 4| 5| 6| 7|  <- memfd slot
+//   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//                      ^^^^^^^^^^^
+//                      slots 6, 7, 0, 1
+//
+// Both mappings alias the same memfd pages, so a write through one is
+// visible through the other. head_ and tail_ count elements ever popped and
+// pushed; slot = count % slot_count_. Any run of up to slot_count_ slots
+// starting in the first mapping therefore ends within the second.
 template <typename T, std::size_t M>
 class BatchRingBuffer {
   static_assert(M > 0, "BatchRingBuffer must have a non-zero capacity");
