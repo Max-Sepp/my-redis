@@ -64,9 +64,19 @@ bool Connection::Send(const std::string_view bytes) {
 }
 
 bool Connection::Flush() {
-  const std::optional<std::size_t> sent = SendUntilWouldBlock(out_buffer_);
+  const std::optional<std::size_t> sent =
+      SendUntilWouldBlock(std::string_view(out_buffer_).substr(out_offset_));
   if (!sent) return false;
-  out_buffer_.erase(0, *sent);
+  out_offset_ += *sent;
+  if (out_offset_ == out_buffer_.size()) {
+    out_buffer_.clear();
+    out_offset_ = 0;
+  } else if (out_offset_ > out_buffer_.size() / 2) {
+    // Compact only once the sent prefix outweighs the unsent tail, so each
+    // byte moved is paid for by a byte already sent: O(1) amortised per byte.
+    out_buffer_.erase(0, out_offset_);
+    out_offset_ = 0;
+  }
   return true;
 }
 

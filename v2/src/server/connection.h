@@ -46,7 +46,9 @@ class Connection {
   bool Flush();
 
   // True while bytes remain that the socket has not yet accepted.
-  [[nodiscard]] bool HasPendingWrites() const { return !out_buffer_.empty(); }
+  [[nodiscard]] bool HasPendingWrites() const {
+    return out_offset_ < out_buffer_.size();
+  }
 
  private:
   // Writes `bytes` straight to the socket, copying only the unsent tail into
@@ -59,9 +61,12 @@ class Connection {
   int fd_;
   // Incrementally accumulates received bytes and yields parsed RESP values.
   RespValueQueue parse_queue_;
-  // Bytes queued for writing that have not yet been accepted by the socket.
-  // Drained on EPOLLOUT.
+  // Bytes queued for writing; those from out_offset_ onwards have not yet been
+  // accepted by the socket. Drained on EPOLLOUT.
   std::string out_buffer_;
+  // Start of the unsent bytes in out_buffer_. Advancing it instead of erasing
+  // from the front keeps a partial send from shifting the whole backlog.
+  std::size_t out_offset_ = 0;
 };
 
 }  // namespace myredis
