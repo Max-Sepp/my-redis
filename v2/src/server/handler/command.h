@@ -1,6 +1,7 @@
 #ifndef MYREDIS_SERVER_HANDLER_COMMAND_H_
 #define MYREDIS_SERVER_HANDLER_COMMAND_H_
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <variant>

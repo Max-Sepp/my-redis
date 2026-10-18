@@ -6,6 +6,7 @@ TIDY_BUILD_DIR ?= build/v2/debug
 
 # C++ sources checked by format/tidy (v2 only; thirdparty is excluded).
 V2_SOURCES = $(shell git ls-files 'v2/src/*.cc' 'v2/src/*.h' 'v2/tests/*.cc')
+V2_HEADERS = $(shell git ls-files 'v2/src/*.h')
 
 .PHONY: help all debug release v1-debug v1-release v2-debug v2-release test clean \
 	format format-check tidy-check
@@ -62,9 +63,19 @@ format-check:
 	$(CLANG_FORMAT) --dry-run --Werror $(V2_SOURCES)
 
 # Uses build/v2/debug/compile_commands.json, so run `make v2-debug` (or just
-# configure) first. Headers are covered via HeaderFilterRegex in v2/.clang-tidy.
+# configure) first. Header contents are covered via HeaderFilterRegex in
+# v2/.clang-tidy, but misc-include-cleaner only checks the main file's includes,
+# so each header is also run through clang-tidy as its own main file (the
+# compile command is inferred from the database).
+# The "N warnings generated." lines count diagnostics in system/thirdparty
+# headers that HeaderFilterRegex already suppresses, so they are filtered out;
+# pipefail keeps clang-tidy's exit status.
 tidy-check:
-	$(RUN_CLANG_TIDY) -clang-tidy-binary $(CLANG_TIDY) -p $(TIDY_BUILD_DIR) -quiet '$(CURDIR)/v2/(src|tests)/'
+	@bash -o pipefail -c "$(RUN_CLANG_TIDY) -clang-tidy-binary $(CLANG_TIDY) -p $(TIDY_BUILD_DIR) -quiet '$(CURDIR)/v2/(src|tests)/' 2>&1 \
+		| sed -E '/^([0-9]+ warnings? generated\.)?$$/d'"
+	@echo "Running clang-tidy for headers ..."
+	@bash -o pipefail -c "printf '%s\n' $(V2_HEADERS) | xargs -P\$$(nproc) -n1 $(CLANG_TIDY) -p $(TIDY_BUILD_DIR) -quiet 2>&1 \
+		| sed -E '/^([0-9]+ warnings? generated\.)?$$/d'"
 
 clean:
 	@echo "Removing build/"

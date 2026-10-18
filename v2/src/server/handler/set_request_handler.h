@@ -6,7 +6,7 @@
 #include <string>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -25,15 +25,19 @@ class SetRequestHandler final : public Handler {
            KeyArg(*command, 0) != nullptr;
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     if (!command || command->args.size() != 2) {
-      return Error("ERR syntax error");
+      out.Error("ERR syntax error");
+      return;
     }
     const std::string* key = KeyArg(*command, 0);
-    if (key == nullptr) return Error("ERR syntax error");
+    if (key == nullptr) {
+      out.Error("ERR syntax error");
+      return;
+    }
     store_->Set(*key, command->args[1]);
-    return SimpleString("OK");
+    out.SimpleString("OK");
   }
 
  private:

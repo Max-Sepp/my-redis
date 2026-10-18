@@ -5,9 +5,10 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "resp_value/resp_value.h"
-#include "resp_value/resp_values.h"
+#include "resp_value/resp_writer.h"
 #include "server/handler/command.h"
 #include "server/handler/handler.h"
 #include "store/store.h"
@@ -29,14 +30,17 @@ class TtlRequestHandler final : public Handler {
            command->args.size() == 1 && KeyArg(*command, 0) != nullptr;
   }
 
-  [[nodiscard]] RespValue Handle(const RespValue& request) override {
+  void Handle(const RespValue& request, RespWriter& out) override {
     const std::optional<Command> command = ParseCommand(request);
     const std::string* key = command ? KeyArg(*command, 0) : nullptr;
-    if (key == nullptr) return Error("ERR syntax error");
+    if (key == nullptr) {
+      out.Error("ERR syntax error");
+      return;
+    }
     const std::int64_t result = store_->Ttl(*key);
     // -1 (no TTL) and -2 (no key) are sentinels, not durations — don't
     // convert them.
-    return Integer(result < 0 ? result : result / time_conversion_factor_);
+    out.Integer(result < 0 ? result : result / time_conversion_factor_);
   }
 
  private:

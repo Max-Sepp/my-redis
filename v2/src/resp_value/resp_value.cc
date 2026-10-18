@@ -6,15 +6,24 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "resp_value/byte_sink.h"
+#include "resp_value/resp_writer.h"
+
 namespace myredis {
 
 namespace {
+
+struct StringSink : ByteSink {
+  void Append(const std::string_view piece) override { bytes.append(piece); }
+  std::string bytes;
+};
 
 // Wraps a parsed alternative in a RespVariant, selecting the alternative
 // explicitly. Returning the optional directly is wrong for
@@ -169,30 +178,41 @@ std::optional<RespValue::RespArray> RespValue::ParseArray(
 }
 
 std::string RespValue::Serialize() const {
-  return std::visit(
-      []<typename RespVariant>(const RespVariant& val) -> std::string {
+  StringSink sink;
+  SerializeTo(sink);
+  return std::move(sink.bytes);
+}
+
+void RespValue::SerializeTo(ByteSink& sink) const {
+  RespWriter writer(sink);
+  WriteTo(writer);
+}
+
+void RespValue::WriteTo(RespWriter& writer) const {
+  std::visit(
+      [&writer]<typename RespVariant>(const RespVariant& val) {
         using T = std::decay_t<RespVariant>;
 
         if constexpr (std::is_same_v<T, RespSimpleString>) {
-          return "+" + val + "\r\n";
+          writer.SimpleString(val);
         } else if constexpr (std::is_same_v<T, RespSimpleError>) {
-          return "-" + val.message + "\r\n";
+          writer.Error(val.message);
         } else if constexpr (std::is_same_v<T, RespInteger>) {
-          return ":" + std::to_string(val) + "\r\n";
+          writer.Integer(val);
         } else if constexpr (std::is_same_v<T, RespBulkString>) {
           if (!val.has_value()) {
-            return "$-1\r\n";
+            writer.NullBulkString();
+            return;
           }
-          const std::string& str = val.value();
-          return "$" + std::to_string(str.length()) + "\r\n" + str + "\r\n";
+          writer.BulkString(*val);
         } else if constexpr (std::is_same_v<T, RespArray>) {
-          std::string result = "*" + std::to_string(val.size()) + "\r\n";
+          writer.ArrayHeader(val.size());
           for (const auto& element : val) {
-            result += element.Serialize();
+            element.WriteTo(writer);
           }
-          return result;
+        } else {
+          throw std::invalid_argument("Resp Value variant not a valid variant");
         }
-        throw std::invalid_argument("Resp Value variant not a valid variant");
       },
       value_);
 }

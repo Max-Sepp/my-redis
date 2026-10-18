@@ -16,6 +16,7 @@ set(RESP_VALUE_SOURCES
         src/resp_value/resp_value.cc
         src/resp_value/resp_value_queue.cc
         src/resp_value/resp_values.cc
+        src/resp_value/resp_writer.cc
 )
 
 set(NETWORK_SOURCES
@@ -84,6 +85,7 @@ if (BUILD_TESTS)
     add_executable(parser_tests
             tests/parser_tests.cc
             src/resp_value/resp_value.cc
+            src/resp_value/resp_writer.cc
     )
 
     # Link the test executable against Google Test
@@ -101,7 +103,14 @@ if (BUILD_TESTS)
     target_link_libraries(store_tests PRIVATE GTest::gtest_main)
     target_include_directories(store_tests PRIVATE src)
 
+    add_executable(batched_ring_buffer_tests
+            tests/batched_ring_buffer_tests.cc
+    )
+    target_link_libraries(batched_ring_buffer_tests PRIVATE GTest::gtest_main)
+    target_include_directories(batched_ring_buffer_tests PRIVATE src)
+
     include(GoogleTest)
     gtest_discover_tests(parser_tests)
     gtest_discover_tests(store_tests)
+    gtest_discover_tests(batched_ring_buffer_tests)
 endif ()
