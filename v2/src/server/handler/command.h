@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -46,6 +47,22 @@ inline std::optional<Command> ParseCommand(const RespValue& request) {
     command.args.push_back(*arg);
   }
   return command;
+}
+
+// Returns the command keyword of `request` without copying or validating its
+// arguments, or std::nullopt if it has no usable keyword. Used by the
+// dispatcher to pick a handler; the handler then does the full parse.
+inline std::optional<std::string_view> PeekCommandName(
+    const RespValue& request) {
+  const auto* array = std::get_if<RespValue::RespArray>(&request.GetValue());
+  if (array == nullptr || array->empty()) return std::nullopt;
+
+  const auto* name =
+      std::get_if<RespValue::RespBulkString>(&array->front().GetValue());
+  if (name == nullptr || !name->has_value() || (*name)->empty()) {
+    return std::nullopt;
+  }
+  return std::string_view(**name);
 }
 
 // Returns args[index] if it exists and is a non-null, non-empty bulk string

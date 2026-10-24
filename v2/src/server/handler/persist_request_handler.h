@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -15,18 +16,20 @@ namespace myredis {
 
 // PERSIST <key>: removes key's TTL and replies :1, or :0 if the key doesn't
 // exist or has no TTL.
-class PersistRequestHandler final : public Handler {
+class PersistRequestHandler {
  public:
+  static constexpr std::string_view kName = "PERSIST";
+
   explicit PersistRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+  [[nodiscard]] static bool IsHandler(const RespValue& request) {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "PERSIST" && command->args.size() == 1 &&
+    return command && command->name == kName && command->args.size() == 1 &&
            KeyArg(*command, 0) != nullptr;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     const std::string* key = command ? KeyArg(*command, 0) : nullptr;
     if (key == nullptr) {
@@ -43,6 +46,8 @@ class PersistRequestHandler final : public Handler {
   // snapshot restore).
   const std::unique_ptr<Store>& store_;
 };
+
+static_assert(RequestHandler<PersistRequestHandler>);
 
 }  // namespace myredis
 

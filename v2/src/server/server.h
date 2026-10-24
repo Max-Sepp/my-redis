@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "concurrent/event_fd.h"
-#include "server/handler/request_dispatcher.h"
+#include "server/handler/command_handlers.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
 #include "snapshot/snapshotter.h"
@@ -58,7 +58,7 @@ class Server {
 
   // Single command executor: the main thread owns the dispatcher and its store,
   // so command execution needs no locking.
-  RequestDispatcher dispatcher_;
+  CommandDispatcher dispatcher_;
 
   // Periodically forks to write the store to disk; see CreateSnapshot.
   Snapshotter snapshotter_;

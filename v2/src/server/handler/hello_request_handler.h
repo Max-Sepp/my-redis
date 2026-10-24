@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -15,13 +16,16 @@ namespace myredis {
 // info. Only RESP2 (`resp_value/`) is implemented, so the only accepted
 // protover is "2"; anything else (notably "3") is rejected the way real
 // Redis rejects protocol versions the server doesn't speak.
-class HelloRequestHandler final : public Handler {
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+class HelloRequestHandler {
+ public:
+  static constexpr std::string_view kName = "HELLO";
+
+  [[nodiscard]] static bool IsHandler(const RespValue& request) {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "HELLO" && command->args.size() <= 1;
+    return command && command->name == kName && command->args.size() <= 1;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  static void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     if (command && command->args.size() == 1 && command->args[0] != "2") {
       out.Error("NOPROTO unsupported protocol version");
@@ -44,6 +48,8 @@ class HelloRequestHandler final : public Handler {
     out.ArrayHeader(0);
   }
 };
+
+static_assert(RequestHandler<HelloRequestHandler>);
 
 }  // namespace myredis
 

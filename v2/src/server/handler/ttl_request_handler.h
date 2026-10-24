@@ -5,7 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -15,22 +15,25 @@
 
 namespace myredis {
 
-class TtlRequestHandler final : public Handler {
+// TTL/PTTL <key>: replies with key's remaining TTL in seconds/milliseconds
+// respectively, -1 if it has none, or -2 if the key doesn't exist.
+//
+// `kTimeConversionFactor` converts milliseconds to the reply's unit.
+template <FixedString kCommandName, int kTimeConversionFactor>
+class TtlRequestHandler {
  public:
-  explicit TtlRequestHandler(std::string handler_name,
-                             const int time_conversion_factor,
-                             const std::unique_ptr<Store>& store)
-      : store_(store),
-        handler_name_(std::move(handler_name)),
-        time_conversion_factor_(time_conversion_factor) {}
+  static constexpr std::string_view kName = kCommandName.View();
 
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+  explicit TtlRequestHandler(const std::unique_ptr<Store>& store)
+      : store_(store) {}
+
+  [[nodiscard]] bool IsHandler(const RespValue& request) const {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == handler_name_ &&
-           command->args.size() == 1 && KeyArg(*command, 0) != nullptr;
+    return command && command->name == kName && command->args.size() == 1 &&
+           KeyArg(*command, 0) != nullptr;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     const std::string* key = command ? KeyArg(*command, 0) : nullptr;
     if (key == nullptr) {
@@ -40,7 +43,7 @@ class TtlRequestHandler final : public Handler {
     const std::int64_t result = store_->Ttl(*key);
     // -1 (no TTL) and -2 (no key) are sentinels, not durations — don't
     // convert them.
-    out.Integer(result < 0 ? result : result / time_conversion_factor_);
+    out.Integer(result < 0 ? result : result / kTimeConversionFactor);
   }
 
  private:
@@ -48,9 +51,6 @@ class TtlRequestHandler final : public Handler {
   // reference stays valid even if the store's contents are replaced (e.g.
   // snapshot restore).
   const std::unique_ptr<Store>& store_;
-
-  const std::string handler_name_;
-  const int time_conversion_factor_;
 };
 
 }  // namespace myredis

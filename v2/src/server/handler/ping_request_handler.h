@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -11,13 +12,16 @@
 
 namespace myredis {
 
-class PingRequestHandler final : public Handler {
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+class PingRequestHandler {
+ public:
+  static constexpr std::string_view kName = "PING";
+
+  [[nodiscard]] static bool IsHandler(const RespValue& request) {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "PING" && command->args.size() <= 1;
+    return command && command->name == kName && command->args.size() <= 1;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  static void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     if (!command || command->args.empty()) {
       out.SimpleString("PONG");
@@ -31,6 +35,8 @@ class PingRequestHandler final : public Handler {
     out.BulkString(*arg);
   }
 };
+
+static_assert(RequestHandler<PingRequestHandler>);
 
 }  // namespace myredis
 

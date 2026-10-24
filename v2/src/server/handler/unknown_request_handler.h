@@ -7,18 +7,16 @@
 
 namespace myredis {
 
-// Fallback handler: matches any request the earlier handlers rejected and
-// replies with an error. Must be last in the dispatch chain.
-class UnknownRequestHandler final : public Handler {
+// Fallback handler: the dispatcher's reply for any request with an
+// unrecognised command keyword, or one its handler rejected.
+class UnknownRequestHandler {
  public:
-  [[nodiscard]] bool IsHandler(const RespValue& /*request*/) const override {
-    return true;
-  }
-
-  void Handle(const RespValue& /*request*/, RespWriter& out) override {
+  static void Handle(const RespValue& /*request*/, RespWriter& out) {
     out.Error("Unknown subcommand or command");
   }
 };
+
+static_assert(FallbackHandler<UnknownRequestHandler>);
 
 }  // namespace myredis
 
