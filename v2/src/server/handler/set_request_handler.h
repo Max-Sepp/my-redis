@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -14,18 +15,20 @@
 namespace myredis {
 
 // SET <key> <value>: stores value under key and replies +OK.
-class SetRequestHandler final : public Handler {
+class SetRequestHandler {
  public:
+  static constexpr std::string_view kName = "SET";
+
   explicit SetRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+  [[nodiscard]] static bool IsHandler(const RespValue& request) {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "SET" && command->args.size() == 2 &&
+    return command && command->name == kName && command->args.size() == 2 &&
            KeyArg(*command, 0) != nullptr;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     if (!command || command->args.size() != 2) {
       out.Error("ERR syntax error");
@@ -46,6 +49,8 @@ class SetRequestHandler final : public Handler {
   // snapshot restore).
   const std::unique_ptr<Store>& store_;
 };
+
+static_assert(RequestHandler<SetRequestHandler>);
 
 }  // namespace myredis
 

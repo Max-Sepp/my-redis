@@ -6,8 +6,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
-#include <utility>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -23,27 +23,27 @@ namespace myredis {
 // absolute unix timestamp (in seconds/milliseconds respectively).
 // All four reply :1, or :0 if the key doesn't exist or the option's
 // condition isn't met.
-class ExpireRequestHandler final : public Handler {
+//
+// `kTimeConversionFactor` converts the argument to milliseconds.
+template <FixedString kCommandName, int kTimeConversionFactor,
+          bool kRelativeToNow>
+class ExpireRequestHandler {
  public:
-  explicit ExpireRequestHandler(std::string handler_name,
-                                const int time_conversion_factor,
-                                const bool relative_to_now,
-                                const std::unique_ptr<Store>& store)
-      : store_(store),
-        handler_name_(std::move(handler_name)),
-        time_conversion_factor_(time_conversion_factor),
-        relative_to_now_(relative_to_now) {}
+  static constexpr std::string_view kName = kCommandName.View();
 
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+  explicit ExpireRequestHandler(const std::unique_ptr<Store>& store)
+      : store_(store) {}
+
+  [[nodiscard]] bool IsHandler(const RespValue& request) const {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == handler_name_ &&
+    return command && command->name == kName &&
            (command->args.size() == 2 || command->args.size() == 3) &&
            KeyArg(*command, 0) != nullptr &&
            ParseInteger(command->args[1]).has_value() &&
            ParseOption(*command).has_value();
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     if (!command || command->args.size() < 2) {
       out.Error("ERR syntax error");
@@ -57,8 +57,8 @@ class ExpireRequestHandler final : public Handler {
       return;
     }
 
-    const int64_t base = relative_to_now_ ? store_->NowMs() : 0;
-    const int64_t proposed_expiry = base + (*value * time_conversion_factor_);
+    const int64_t base = kRelativeToNow ? store_->NowMs() : 0;
+    const int64_t proposed_expiry = base + (*value * kTimeConversionFactor);
     const bool set = store_->ExpireAt(*key, proposed_expiry, *option);
     out.Integer(set ? 1 : 0);
   }
@@ -90,10 +90,6 @@ class ExpireRequestHandler final : public Handler {
   // reference stays valid even if the store's contents are replaced (e.g.
   // snapshot restore).
   const std::unique_ptr<Store>& store_;
-
-  const std::string handler_name_;
-  const int time_conversion_factor_;
-  const bool relative_to_now_;
 };
 
 }  // namespace myredis

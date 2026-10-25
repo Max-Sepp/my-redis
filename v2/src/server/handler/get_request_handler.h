@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -15,18 +16,20 @@ namespace myredis {
 
 // GET <key>: returns the stored bulk string, or a null bulk string if the key
 // is absent (or was stored with a null value).
-class GetRequestHandler final : public Handler {
+class GetRequestHandler {
  public:
+  static constexpr std::string_view kName = "GET";
+
   explicit GetRequestHandler(const std::unique_ptr<Store>& store)
       : store_(store) {}
 
-  [[nodiscard]] bool IsHandler(const RespValue& request) const override {
+  [[nodiscard]] static bool IsHandler(const RespValue& request) {
     const std::optional<Command> command = ParseCommand(request);
-    return command && command->name == "GET" && command->args.size() == 1 &&
+    return command && command->name == kName && command->args.size() == 1 &&
            KeyArg(*command, 0) != nullptr;
   }
 
-  void Handle(const RespValue& request, RespWriter& out) override {
+  void Handle(const RespValue& request, RespWriter& out) {
     const std::optional<Command> command = ParseCommand(request);
     const std::string* key = command ? KeyArg(*command, 0) : nullptr;
     if (key == nullptr) {
@@ -47,6 +50,8 @@ class GetRequestHandler final : public Handler {
   // snapshot restore).
   const std::unique_ptr<Store>& store_;
 };
+
+static_assert(RequestHandler<GetRequestHandler>);
 
 }  // namespace myredis
 

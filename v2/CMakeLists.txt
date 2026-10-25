@@ -44,7 +44,6 @@ set(SERVER_SOURCES
         ${RESP_VALUE_SOURCES}
         src/concurrent/event_fd.cc
         src/server/connection.cc
-        src/server/handler/request_dispatcher.cc
         src/server/io_thread.cc
         src/server/server.cc
         src/snapshot/snapshotter.cc
