@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "concurrent/batched_ring_buffer.h"
+#include "data_structures/concurrent/batched_ring_buffer.h"
 
 namespace myredis {
 namespace {

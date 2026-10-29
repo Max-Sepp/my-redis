@@ -1,5 +1,5 @@
-#ifndef MYREDIS_CONCURRENT_BACKPRESSURE_QUEUE_H_
-#define MYREDIS_CONCURRENT_BACKPRESSURE_QUEUE_H_
+#ifndef MYREDIS_DATA_STRUCTURES_CONCURRENT_BACKPRESSURE_QUEUE_H_
+#define MYREDIS_DATA_STRUCTURES_CONCURRENT_BACKPRESSURE_QUEUE_H_
 
 #include <atomic>
 #include <cstddef>
@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "concurrent/event_fd.h"
-#include "concurrent/single_consumer_producer_queue.h"
+#include "data_structures/concurrent/single_consumer_producer_queue.h"
 
 namespace myredis {
 
@@ -127,4 +127,4 @@ class BackpressureQueue {
 
 }  // namespace myredis
 
-#endif  // MYREDIS_CONCURRENT_BACKPRESSURE_QUEUE_H_
+#endif  // MYREDIS_DATA_STRUCTURES_CONCURRENT_BACKPRESSURE_QUEUE_H_

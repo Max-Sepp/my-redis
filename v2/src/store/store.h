@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "store/map/map.h"
+#include "data_structures/map/map.h"
 #include "time/time.h"
 
 namespace myredis {

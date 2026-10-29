@@ -1,5 +1,5 @@
-#ifndef MYREDIS_STORE_MAP_H_
-#define MYREDIS_STORE_MAP_H_
+#ifndef MYREDIS_DATA_STRUCTURES_MAP_MAP_H_
+#define MYREDIS_DATA_STRUCTURES_MAP_MAP_H_
 
 #include <functional>
 #include <optional>
@@ -25,4 +25,4 @@ class Map {
 
 }  // namespace myredis
 
-#endif  // MYREDIS_STORE_MAP_H_
+#endif  // MYREDIS_DATA_STRUCTURES_MAP_MAP_H_
