@@ -44,6 +44,15 @@ class StoreExpiryTest : public ::testing::Test {
 
   void AdvancePastTtl() { time_->now_ms = kStartMs + kTtlMs + 1; }
 
+  // Runs ActiveExpireCycle while rounds keep finding expired keys. Returns the
+  // number removed.
+  std::size_t ExpireAll() {
+    return store_
+        ->ActiveExpireCycle(
+            [](const Store::ExpireRound& round) { return round.removed > 0; })
+        .removed;
+  }
+
   FakeTime* time_ = nullptr;
   std::unique_ptr<Store> store_;
 };
@@ -51,14 +60,14 @@ class StoreExpiryTest : public ::testing::Test {
 }  // namespace
 
 TEST_F(StoreExpiryTest, EmptyStoreRemovesNothing) {
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
 }
 
 TEST_F(StoreExpiryTest, RemovesExpiredKey) {
   SetWithTtl("a");
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 1);
+  EXPECT_EQ(ExpireAll(), 1);
   EXPECT_EQ(store_->SerialiseToJson(), "{}");
 }
 
@@ -66,7 +75,7 @@ TEST_F(StoreExpiryTest, KeepsKeysThatHaveNotExpired) {
   SetWithTtl("volatile");
   store_->Set("persistent", "value");
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
   EXPECT_EQ(store_->Get("volatile"), "value");
   EXPECT_EQ(store_->Get("persistent"), "value");
 }
@@ -75,7 +84,7 @@ TEST_F(StoreExpiryTest, KeyExpiringExactlyNowIsKept) {
   SetWithTtl("a");
   time_->now_ms = kStartMs + kTtlMs;
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
   EXPECT_EQ(store_->Get("a"), "value");
 }
 
@@ -86,7 +95,7 @@ TEST_F(StoreExpiryTest, RemovesEveryKeyWhenAllHaveExpired) {
   for (int i = 0; i < kNumKeys; ++i) SetWithTtl(std::to_string(i));
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), kNumKeys);
+  EXPECT_EQ(ExpireAll(), kNumKeys);
   EXPECT_EQ(store_->SerialiseToJson(), "{}");
 }
 
@@ -95,7 +104,7 @@ TEST_F(StoreExpiryTest, PersistedKeyIsNotRemoved) {
   ASSERT_TRUE(store_->Persist("a"));
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
   EXPECT_EQ(store_->Get("a"), "value");
 }
 
@@ -104,7 +113,7 @@ TEST_F(StoreExpiryTest, OverwrittenKeyLosesItsTtl) {
   store_->Set("a", "new");
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
   EXPECT_EQ(store_->Get("a"), "new");
 }
 
@@ -113,7 +122,7 @@ TEST_F(StoreExpiryTest, DeletedKeyLeavesTheIndex) {
   store_->Del("a");
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 0);
+  EXPECT_EQ(ExpireAll(), 0);
 }
 
 TEST_F(StoreExpiryTest, RestoredTtlsAreExpired) {
@@ -121,7 +130,7 @@ TEST_F(StoreExpiryTest, RestoredTtlsAreExpired) {
       R"({"old":{"value":"v","expiry":1500},"kept":{"value":"v","expiry":-1}})");
   AdvancePastTtl();
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 1);
+  EXPECT_EQ(ExpireAll(), 1);
   EXPECT_EQ(store_->SerialiseToJson(), R"({"kept":{"value":"v","expiry":-1}})");
 }
 
@@ -131,7 +140,7 @@ TEST_F(StoreExpiryTest, StopsAfterOneRoundWhenPredicateDeclines) {
   AdvancePastTtl();
 
   int rounds = 0;
-  const std::size_t removed =
+  const Store::ExpireCycleResult result =
       store_->ActiveExpireCycle([&](const Store::ExpireRound& round) {
         rounds++;
         EXPECT_EQ(round.sampled, 20);
@@ -140,7 +149,8 @@ TEST_F(StoreExpiryTest, StopsAfterOneRoundWhenPredicateDeclines) {
       });
 
   EXPECT_EQ(rounds, 1);
-  EXPECT_EQ(removed, 20);
+  EXPECT_EQ(result.removed, 20);
+  EXPECT_FALSE(result.index_empty);
 }
 
 TEST_F(StoreExpiryTest, StopsWhenIndexEmptiesEvenIfPredicateContinues) {
@@ -148,18 +158,44 @@ TEST_F(StoreExpiryTest, StopsWhenIndexEmptiesEvenIfPredicateContinues) {
   SetWithTtl("b");
   AdvancePastTtl();
 
-  EXPECT_EQ(
-      store_->ActiveExpireCycle([](const Store::ExpireRound&) { return true; }),
-      2);
+  const Store::ExpireCycleResult result =
+      store_->ActiveExpireCycle([](const Store::ExpireRound&) { return true; });
+  EXPECT_EQ(result.removed, 2);
+  EXPECT_TRUE(result.index_empty);
+  // The keys ran out partway through the first round.
+  EXPECT_EQ(result.last_round.sampled, 2);
 }
 
-TEST_F(StoreExpiryTest, DefaultPolicyStopsWhenTimeBudgetIsSpent) {
-  // Every key has expired, so only the time budget can end the cycle early.
-  // Each clock read jumps past the 25ms budget, so one round runs.
-  constexpr int kNumKeys = 1000;
-  for (int i = 0; i < kNumKeys; ++i) SetWithTtl(std::to_string(i));
+TEST_F(StoreExpiryTest, GetDeletesExpiredKey) {
+  SetWithTtl("a");
   AdvancePastTtl();
-  time_->step_ms = 30;
 
-  EXPECT_EQ(store_->ActiveExpireCycle(), 20);
+  EXPECT_FALSE(store_->Get("a").has_value());
+  // Already gone, so the cycle has nothing left to remove.
+  EXPECT_EQ(ExpireAll(), 0);
+}
+
+TEST_F(StoreExpiryTest, ExpireAtDoesNotReviveExpiredKey) {
+  SetWithTtl("a");
+  AdvancePastTtl();
+
+  EXPECT_FALSE(store_->ExpireAt("a", kStartMs + 10 * kTtlMs));
+  EXPECT_FALSE(store_->Get("a").has_value());
+}
+
+TEST_F(StoreExpiryTest, TtlOfExpiredKeyReportsMissing) {
+  SetWithTtl("a");
+  AdvancePastTtl();
+
+  EXPECT_EQ(store_->Ttl("a"), -2);
+  EXPECT_EQ(ExpireAll(), 0);
+}
+
+TEST_F(StoreExpiryTest, SnapshotLeavesOutExpiredKeys) {
+  SetWithTtl("expired");
+  store_->Set("kept", "value");
+  AdvancePastTtl();
+
+  EXPECT_EQ(store_->SerialiseToJson(),
+            R"({"kept":{"value":"value","expiry":-1}})");
 }

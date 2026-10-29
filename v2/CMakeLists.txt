@@ -45,6 +45,7 @@ set(SERVER_SOURCES
         src/concurrent/event_fd.cc
         src/server/connection.cc
         src/server/io_thread.cc
+        src/maintenance/maintenance_scheduler.cc
         src/server/server.cc
         src/snapshot/snapshotter.cc
         src/store/serialise.cc
@@ -112,6 +113,16 @@ if (BUILD_TESTS)
     target_link_libraries(store_expiry_tests PRIVATE GTest::gtest_main)
     target_include_directories(store_expiry_tests PRIVATE src)
 
+    add_executable(maintenance_tests
+            tests/maintenance_tests.cc
+            src/maintenance/maintenance_scheduler.cc
+            src/store/serialise.cc
+            src/store/store.cc
+            src/data_structures/map/hash.cc
+    )
+    target_link_libraries(maintenance_tests PRIVATE GTest::gtest_main)
+    target_include_directories(maintenance_tests PRIVATE src)
+
     add_executable(batched_ring_buffer_tests
             tests/batched_ring_buffer_tests.cc
     )
@@ -122,5 +133,6 @@ if (BUILD_TESTS)
     gtest_discover_tests(parser_tests)
     gtest_discover_tests(store_tests)
     gtest_discover_tests(store_expiry_tests)
+    gtest_discover_tests(maintenance_tests)
     gtest_discover_tests(batched_ring_buffer_tests)
 endif ()

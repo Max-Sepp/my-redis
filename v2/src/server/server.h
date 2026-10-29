@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "concurrent/event_fd.h"
+#include "maintenance/maintenance_scheduler.h"
 #include "server/handler/command_handlers.h"
 #include "server/io_thread.h"
 #include "server/messages.h"
@@ -63,11 +64,16 @@ class Server {
   // Periodically forks to write the store to disk; see CreateSnapshot.
   Snapshotter snapshotter_;
 
+  // Background housekeeping (active expiry). Run on maintenance_fd_'s tick and
+  // whenever the event loop is idle with work pending. Declared after store_,
+  // which its tasks reference.
+  MaintenanceScheduler maintenance_;
+
   int epoll_fd_ = -1;
   int listen_fd_ = -1;
   int snapshot_fd_ = -1;
-  // Fires every kExpireCycleIntervalMs to run the store's ActiveExpireCycle
-  int expire_fd_ = -1;
+  // Fires every kMaintenanceIntervalMs to give maintenance_ a slice
+  int maintenance_fd_ = -1;
   // IO threads -> main wakeup; shared by all IO threads
   EventFd command_event_;
 

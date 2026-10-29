@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -25,11 +26,9 @@ Store::Store(std::unique_ptr<Time> time, const std::uint64_t rng_seed)
       time_(std::move(time)),
       rng_(rng_seed) {}
 
-[[nodiscard]] std::optional<std::string> Store::Get(
-    const std::string& key) const {
-  const auto found = data_->LookUp(key);
+[[nodiscard]] std::optional<std::string> Store::Get(const std::string& key) {
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return std::nullopt;
-  if (IsExpired(found->get(), time_->NowMs())) return std::nullopt;
   return found->get().value_;
 }
 
@@ -50,7 +49,7 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms) {
 
 bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
                      ExpireOption option) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return false;
   Entry& entry = *found;
 
@@ -85,7 +84,7 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
 }
 
 [[nodiscard]] std::int64_t Store::Ttl(const std::string& key) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return -2;  // Key does not exist
   Entry& entry = *found;
   if (entry.expiry_ == NO_EXPIRY) return -1;  // Key exists but has no TTL
@@ -97,49 +96,40 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
 [[nodiscard]] std::int64_t Store::NowMs() const { return time_->NowMs(); }
 
 bool Store::Persist(const std::string& key) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return false;
   Entry& entry = *found;
   if (entry.expiry_ == NO_EXPIRY) return false;
-  if (entry.expiry_ < time_->NowMs()) return false;  // Key has expired
   entry.expiry_ = NO_EXPIRY;
   expires_->Remove(key);
   return true;
 }
 
-std::size_t Store::ActiveExpireCycle(
+Store::ExpireCycleResult Store::ActiveExpireCycle(
     const ExpireContinuePredicate& should_continue) {
   const std::int64_t now_ms = time_->NowMs();
-  std::size_t total_removed = 0;
+  ExpireCycleResult result{
+      .removed = 0, .last_round = {.sampled = 0, .removed = 0},
+      .index_empty = false};
   bool keep_sampling = true;
   while (keep_sampling) {
     // Sampling is with replacement, so a small index may yield the same live
     // key more than once.
     ExpireRound round{.sampled = 0, .removed = 0};
-    bool index_empty = false;
-    while (!index_empty && round.sampled < kExpireSampleSize) {
+    while (!result.index_empty && round.sampled < kExpireSampleSize) {
       const std::optional<std::string> key = expires_->RandomKey(rng_);
       if (!key.has_value()) {
-        index_empty = true;
+        result.index_empty = true;
       } else {
         round.sampled++;
         if (RemoveIfExpired(*key, now_ms)) round.removed++;
       }
     }
-    total_removed += round.removed;
-    keep_sampling = !index_empty && should_continue(round);
+    result.removed += round.removed;
+    result.last_round = round;
+    keep_sampling = !result.index_empty && should_continue(round);
   }
-  return total_removed;
-}
-
-std::size_t Store::ActiveExpireCycle() {
-  const std::int64_t start_ms = time_->NowMs();
-  // A round that was mostly live suggests few expired keys remain, so stop
-  // until the next cycle.
-  return ActiveExpireCycle([this, start_ms](const ExpireRound& round) {
-    return round.removed * kExpireRepeatRatio > round.sampled &&
-           time_->NowMs() - start_ms < kExpireCycleBudgetMs;
-  });
+  return result;
 }
 
 bool Store::RemoveIfExpired(const std::string& key, const int64_t now_ms) {
@@ -151,11 +141,24 @@ bool Store::RemoveIfExpired(const std::string& key, const int64_t now_ms) {
   return found.has_value();
 }
 
+std::optional<std::reference_wrapper<Store::Entry>> Store::LookUpLive(
+    const std::string& key) {
+  const auto found = data_->LookUp(key);
+  if (!found.has_value()) return std::nullopt;
+  if (IsExpired(found->get(), time_->NowMs())) {
+    Del(key);
+    return std::nullopt;
+  }
+  return found;
+}
+
 [[nodiscard]] std::string Store::SerialiseToJson() const {
   std::string out = "{";
   bool first = true;
+  const std::int64_t now_ms = time_->NowMs();
 
   data_->ForEach([&](const std::string& key, const Entry& entry) {
+    if (IsExpired(entry, now_ms)) return;
     if (!first) out.push_back(',');
     first = false;
 
