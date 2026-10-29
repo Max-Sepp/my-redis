@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <optional>
+#include <random>
 
 namespace myredis {
 
@@ -21,6 +22,11 @@ class Map {
   virtual void Remove(const K& key) = 0;
 
   virtual void ForEach(std::function<void(const K&, V&)> action) = 0;
+
+  // Returns a copy of a randomly chosen key, or std::nullopt if the map is
+  // empty. Intended for sampling (e.g. active key expiry), so implementations
+  // may trade exact uniformity for speed.
+  virtual std::optional<K> RandomKey(std::mt19937_64& rng) = 0;
 };
 
 }  // namespace myredis

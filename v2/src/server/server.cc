@@ -43,6 +43,8 @@ constexpr std::size_t kMaxEvents = 64;
 constexpr int kConnectionBacklog = 511;
 constexpr long millisecondsInSecond = 1000;
 constexpr long nanosecondsInMillisecond = 1000000;
+// Matches Redis's default `hz 10`: active expiry runs ten times a second.
+constexpr int kExpireCycleIntervalMs = 100;
 
 // Directory snapshots are written to and restored from, and the prefix the
 // Snapshotter gives each file. Used to construct the Snapshotter; it owns the
@@ -95,9 +97,9 @@ std::pair<long, long> ConvertMills(int mills) {
       (mills % millisecondsInSecond) * nanosecondsInMillisecond);
 }
 
-int CreateTimerIntervalFd(const int snapshot_interval) {
-  if (snapshot_interval <= 0) {
-    return snapshot_interval;
+int CreateTimerIntervalFd(const int interval_ms) {
+  if (interval_ms <= 0) {
+    return interval_ms;
   }
 
   const int timer_fd =
@@ -107,7 +109,7 @@ int CreateTimerIntervalFd(const int snapshot_interval) {
     exit(1);
   }
 
-  const auto [seconds, nanoseconds] = ConvertMills(snapshot_interval);
+  const auto [seconds, nanoseconds] = ConvertMills(interval_ms);
 
   itimerspec its{};
   its.it_value.tv_sec = seconds;
@@ -123,6 +125,14 @@ int CreateTimerIntervalFd(const int snapshot_interval) {
   return timer_fd;
 }
 
+// Consumes a fired timerfd's expiration count so it stops being readable.
+void DrainTimerFd(const int timer_fd) {
+  uint64_t expirations;
+  [[maybe_unused]] const ssize_t size =
+      read(timer_fd, &expirations, sizeof(expirations));
+  assert(size == sizeof(expirations));
+}
+
 unsigned NumIoThreads() {
   // Reserve one core for the main (command-executing) thread.
   const unsigned hardware = std::thread::hardware_concurrency();
@@ -136,7 +146,8 @@ Server::Server(ServerConfig config)
       snapshotter_(kSnapshotDir, kSnapshotPrefix),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
       listen_fd_(CreateListenSocket(config.port)),
-      snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)) {
+      snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)),
+      expire_fd_(CreateTimerIntervalFd(kExpireCycleIntervalMs)) {
   const unsigned num_io_threads = NumIoThreads();
   io_threads_.reserve(num_io_threads);
   for (unsigned i = 0; i < num_io_threads; ++i) {
@@ -145,9 +156,10 @@ Server::Server(ServerConfig config)
 
   if (epoll_fd_ < 0 || listen_fd_ < 0) return;
 
-  // Watch the listen socket (new connections) and the command eventfd
-  // (IO threads have parsed requests to execute).
-  for (const int watched_fd : {listen_fd_, command_event_.Fd(), snapshot_fd_}) {
+  // Watch the listen socket (new connections), the command eventfd (IO threads
+  // have parsed requests to execute) and the snapshot and expiry timers.
+  for (const int watched_fd :
+       {listen_fd_, command_event_.Fd(), snapshot_fd_, expire_fd_}) {
     if (watched_fd != -1) {
       epoll_event event{};
       event.events = EPOLLIN;
@@ -161,6 +173,7 @@ Server::~Server() {
   for (const auto& io_thread : io_threads_) io_thread->Stop();
   if (listen_fd_ >= 0) close(listen_fd_);
   if (epoll_fd_ >= 0) close(epoll_fd_);
+  if (expire_fd_ >= 0) close(expire_fd_);
 }
 
 int Server::Run() {
@@ -199,10 +212,11 @@ int Server::Run() {
         command_event_.Drain();
         ProcessCommands();
       } else if (event.data.fd == snapshot_fd_) {
-        uint64_t expirations;
-        ssize_t size = read(event.data.fd, &expirations, sizeof(expirations));
-        assert(size == sizeof(expirations));
+        DrainTimerFd(snapshot_fd_);
         CreateSnapshot();
+      } else if (event.data.fd == expire_fd_) {
+        DrainTimerFd(expire_fd_);
+        store_->ActiveExpireCycle();
       } else {
         // A snapshot child's pidfd became readable: the child has exited.
         ReapSnapshot(event.data.fd);

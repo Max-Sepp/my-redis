@@ -66,6 +66,8 @@ class Server {
   int epoll_fd_ = -1;
   int listen_fd_ = -1;
   int snapshot_fd_ = -1;
+  // Fires every kExpireCycleIntervalMs to run the store's ActiveExpireCycle
+  int expire_fd_ = -1;
   // IO threads -> main wakeup; shared by all IO threads
   EventFd command_event_;
 
