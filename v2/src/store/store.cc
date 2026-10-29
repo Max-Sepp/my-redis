@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "store/map/standard_map.h"
+#include "data_structures/map/standard_map.h"
 #include "store/serialise.h"
 #include "time/time.h"
 

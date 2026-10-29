@@ -1,7 +1,7 @@
 
 
-#ifndef MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
-#define MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
+#ifndef MYREDIS_DATA_STRUCTURES_MAP_LINEAR_PROBING_HASHMAP_H_
+#define MYREDIS_DATA_STRUCTURES_MAP_LINEAR_PROBING_HASHMAP_H_
 
 #include <algorithm>
 #include <cassert>
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "store/map/map.h"
+#include "data_structures/map/map.h"
 
 namespace myredis {
 
@@ -176,4 +176,4 @@ class LinearProbingHashmap final : public Map<K, V> {
 
 }  // namespace myredis
 
-#endif  // MYREDIS_STORE_LINEAR_PROBING_HASHMAP_H_
+#endif  // MYREDIS_DATA_STRUCTURES_MAP_LINEAR_PROBING_HASHMAP_H_

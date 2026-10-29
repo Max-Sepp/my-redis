@@ -1,12 +1,12 @@
-#ifndef MYREDIS_STORE_STANDARD_MAP_H_
-#define MYREDIS_STORE_STANDARD_MAP_H_
+#ifndef MYREDIS_DATA_STRUCTURES_MAP_STANDARD_MAP_H_
+#define MYREDIS_DATA_STRUCTURES_MAP_STANDARD_MAP_H_
 
 #include <functional>
 #include <optional>
 #include <unordered_map>
 #include <utility>
 
-#include "store/map/map.h"
+#include "data_structures/map/map.h"
 
 namespace myredis {
 
@@ -56,4 +56,4 @@ class StandardMap final : public Map<K, V> {
 
 }  // namespace myredis
 
-#endif  // MYREDIS_STORE_STANDARD_MAP_H_
+#endif  // MYREDIS_DATA_STRUCTURES_MAP_STANDARD_MAP_H_

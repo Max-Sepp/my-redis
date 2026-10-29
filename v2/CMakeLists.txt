@@ -94,10 +94,10 @@ if (BUILD_TESTS)
     target_include_directories(parser_tests PRIVATE src)
 
     # Store tests: the non-concurrent maps are header-only and depend on the
-    # store/map/hash.cc helper.
+    # data_structures/map/hash.cc helper.
     add_executable(store_tests
             tests/store_tests.cc
-            src/store/map/hash.cc
+            src/data_structures/map/hash.cc
     )
     target_link_libraries(store_tests PRIVATE GTest::gtest_main)
     target_include_directories(store_tests PRIVATE src)

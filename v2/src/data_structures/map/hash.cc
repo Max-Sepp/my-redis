@@ -1,4 +1,4 @@
-#include "store/map/hash.h"
+#include "data_structures/map/hash.h"
 
 #include <cstddef>
 #include <functional>

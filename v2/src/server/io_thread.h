@@ -11,9 +11,9 @@
 #include <thread>
 #include <unordered_map>
 
-#include "concurrent/backpressure_queue.h"
-#include "concurrent/batched_ring_buffer.h"
 #include "concurrent/event_fd.h"
+#include "data_structures/concurrent/backpressure_queue.h"
+#include "data_structures/concurrent/batched_ring_buffer.h"
 #include "resp_value/byte_sink.h"
 #include "server/connection.h"
 #include "server/messages.h"
