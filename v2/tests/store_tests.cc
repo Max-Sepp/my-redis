@@ -425,8 +425,7 @@ TEST(LinearProbingHashmapTest, ReinsertPastTombstoneDoesNotDuplicate) {
 }
 
 TEST(LinearProbingHashmapTest, ChurnKeepsEveryLiveKey) {
-  LinearProbingHashmap<std::string, int> map(kDefaultLoadFactor, StringHash,
-                                             2);
+  LinearProbingHashmap<std::string, int> map(kDefaultLoadFactor, StringHash, 2);
   constexpr int kRounds = 10000;
   map.Insert(std::string("kept"), -1);
   for (int i = 0; i < kRounds; ++i) {

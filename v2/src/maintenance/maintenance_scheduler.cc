@@ -31,7 +31,8 @@ bool MaintenanceScheduler::RunSlice(const std::int64_t budget_ms) {
 }
 
 bool MaintenanceScheduler::HasPendingWork() const {
-  return std::ranges::any_of(pending_, [](const bool pending) { return pending; });
+  return std::ranges::any_of(pending_,
+                             [](const bool pending) { return pending; });
 }
 
 }  // namespace myredis

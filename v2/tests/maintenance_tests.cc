@@ -51,8 +51,8 @@ class ExpiryTaskTest : public ::testing::Test {
 
   void SetKeys(const int count, const bool with_ttl) {
     for (int i = 0; i < count; ++i) {
-      const std::string key = (with_ttl ? "volatile-" : "live-") +
-                              std::to_string(i);
+      const std::string key =
+          (with_ttl ? "volatile-" : "live-") + std::to_string(i);
       store_->Set(key, "value");
       if (with_ttl) store_->ExpireAt(key, kStartMs + kTtlMs);
     }

@@ -59,9 +59,7 @@ class StoreExpiryTest : public ::testing::Test {
 
 }  // namespace
 
-TEST_F(StoreExpiryTest, EmptyStoreRemovesNothing) {
-  EXPECT_EQ(ExpireAll(), 0);
-}
+TEST_F(StoreExpiryTest, EmptyStoreRemovesNothing) { EXPECT_EQ(ExpireAll(), 0); }
 
 TEST_F(StoreExpiryTest, RemovesExpiredKey) {
   SetWithTtl("a");

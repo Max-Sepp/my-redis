@@ -182,8 +182,8 @@ class LinearProbingHashmap final : public Map<K, V> {
   void Resize() {
     std::vector<Entry> old_entries = std::move(entries_);
 
-    entries_ = std::vector<Entry>(
-        std::max(static_cast<size_t>(2), (size_ + 1) * 2));
+    entries_ =
+        std::vector<Entry>(std::max(static_cast<size_t>(2), (size_ + 1) * 2));
     size_ = 0;
     tombstones_ = 0;
 

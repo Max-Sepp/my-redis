@@ -108,9 +108,9 @@ bool Store::Persist(const std::string& key) {
 Store::ExpireCycleResult Store::ActiveExpireCycle(
     const ExpireContinuePredicate& should_continue) {
   const std::int64_t now_ms = time_->NowMs();
-  ExpireCycleResult result{
-      .removed = 0, .last_round = {.sampled = 0, .removed = 0},
-      .index_empty = false};
+  ExpireCycleResult result{.removed = 0,
+                           .last_round = {.sampled = 0, .removed = 0},
+                           .index_empty = false};
   bool keep_sampling = true;
   while (keep_sampling) {
     // Sampling is with replacement, so a small index may yield the same live
