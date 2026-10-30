@@ -4,7 +4,7 @@ CLANG_TIDY ?= clang-tidy
 RUN_CLANG_TIDY ?= run-clang-tidy
 TIDY_BUILD_DIR ?= build/v2/debug
 
-# C++ sources checked by format/tidy (v2 only; thirdparty is excluded).
+# C++ sources checked by format/tidy (v2 only).
 V2_SOURCES = $(shell git ls-files 'v2/src/*.cc' 'v2/src/*.h' 'v2/tests/*.cc')
 V2_HEADERS = $(shell git ls-files 'v2/src/*.h')
 

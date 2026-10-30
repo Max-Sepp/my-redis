@@ -136,9 +136,9 @@ TYPED_TEST(MapTest, BulkInsertPerformance) {
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       clock::now() - start);
 
-  // If inserting kNumElements elements takes longer than 200 ms, consider it a
-  // failure.
-  EXPECT_LT(duration.count(), 200)
+  // If inserting kNumElements elements takes longer than 500 ms, consider it a
+  // failure. CI runs this under sanitizers, which slow inserts down.
+  EXPECT_LT(duration.count(), 500)
       << "Bulk insert too slow: " << duration.count() << " ms";
 }
 

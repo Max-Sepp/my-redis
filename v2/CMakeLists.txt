@@ -1,4 +1,17 @@
 cmake_minimum_required(VERSION 3.21)
+
+option(BUILD_TESTS "Build the tests" OFF)
+
+# Automatically enable tests for Debug builds unless the user explicitly disabled them.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
+    set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
+endif ()
+
+# vcpkg installs dependencies during project(), so the feature must be set first.
+if (BUILD_TESTS)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif ()
+
 project(my-redis)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -6,9 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if (POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW)
-endif ()
+find_package(cxxopts CONFIG REQUIRED)
 
 # --- Reusable building blocks ------------------------------------------------
 
@@ -34,7 +45,7 @@ set(CLIENT_SOURCES
 # --- Client executable -------------------------------------------------------
 add_executable(my_redis_client src/client/main.cc ${CLIENT_SOURCES})
 target_include_directories(my_redis_client PRIVATE src)
-target_include_directories(my_redis_client PRIVATE thirdparty)
+target_link_libraries(my_redis_client PRIVATE cxxopts::cxxopts)
 
 # --- Server executable -------------------------------------------------------
 # A single main thread executes commands; a pool of IO threads handle sockets
@@ -53,30 +64,15 @@ set(SERVER_SOURCES
 
 add_executable(my_redis_server src/server/main.cc ${SERVER_SOURCES})
 target_include_directories(my_redis_server PRIVATE src)
-target_include_directories(my_redis_server PRIVATE thirdparty)
+target_link_libraries(my_redis_server PRIVATE cxxopts::cxxopts)
 
 # --- Testing -----------------------------------------------------------------
 # Only include tests if the TESTS option is ON (default: OFF)
-option(BUILD_TESTS "Build the tests" OFF)
-
-# Automatically enable tests for Debug builds unless the user explicitly disabled them.
-if (CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BUILD_TESTS)
-    set(BUILD_TESTS ON CACHE BOOL "Build the tests" FORCE)
-endif ()
-
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "BUILD_TESTS = ${BUILD_TESTS}")
 
 if (BUILD_TESTS)
-    include(FetchContent)
-    FetchContent_Declare(
-            googletest
-            URL https://github.com/google/googletest/archive/refs/tags/v1.18.0.zip
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+    find_package(GTest CONFIG REQUIRED)
 
     enable_testing()
 

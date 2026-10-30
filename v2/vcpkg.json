@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "my-redis",
+  "builtin-baseline": "d186940b2f0c4e8e5b4ff804af57d2a26fbfa091",
+  "dependencies": [
+    "cxxopts"
+  ],
+  "features": {
+    "tests": {
+      "description": "Dependencies of the unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}
