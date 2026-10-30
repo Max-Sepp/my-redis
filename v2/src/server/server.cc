@@ -24,6 +24,8 @@
 #include <utility>
 #include <variant>
 
+#include "maintenance/expiry_task.h"
+#include "maintenance/maintenance_scheduler.h"
 #include "resp_value/byte_sink.h"
 #include "resp_value/resp_value.h"
 #include "resp_value/resp_writer.h"
@@ -43,6 +45,15 @@ constexpr std::size_t kMaxEvents = 64;
 constexpr int kConnectionBacklog = 511;
 constexpr long millisecondsInSecond = 1000;
 constexpr long nanosecondsInMillisecond = 1000000;
+// Matches Redis's default `hz 10`: background tasks get a slice ten times a
+// second even when the server never goes idle.
+constexpr int kMaintenanceIntervalMs = 100;
+// Budgets for one maintenance slice. Both are short because commands wait
+// while a slice runs: the periodic one caps maintenance at about 1% of the
+// main thread under load, and idle slices run back to back while work is
+// pending, so a gap in traffic still gets nearly the whole thread.
+constexpr std::int64_t kPeriodicSliceBudgetMs = 1;
+constexpr std::int64_t kIdleSliceBudgetMs = 1;
 
 // Directory snapshots are written to and restored from, and the prefix the
 // Snapshotter gives each file. Used to construct the Snapshotter; it owns the
@@ -95,9 +106,9 @@ std::pair<long, long> ConvertMills(int mills) {
       (mills % millisecondsInSecond) * nanosecondsInMillisecond);
 }
 
-int CreateTimerIntervalFd(const int snapshot_interval) {
-  if (snapshot_interval <= 0) {
-    return snapshot_interval;
+int CreateTimerIntervalFd(const int interval_ms) {
+  if (interval_ms <= 0) {
+    return interval_ms;
   }
 
   const int timer_fd =
@@ -107,7 +118,7 @@ int CreateTimerIntervalFd(const int snapshot_interval) {
     exit(1);
   }
 
-  const auto [seconds, nanoseconds] = ConvertMills(snapshot_interval);
+  const auto [seconds, nanoseconds] = ConvertMills(interval_ms);
 
   itimerspec its{};
   its.it_value.tv_sec = seconds;
@@ -123,6 +134,14 @@ int CreateTimerIntervalFd(const int snapshot_interval) {
   return timer_fd;
 }
 
+// Consumes a fired timerfd's expiration count so it stops being readable.
+void DrainTimerFd(const int timer_fd) {
+  uint64_t expirations;
+  [[maybe_unused]] const ssize_t size =
+      read(timer_fd, &expirations, sizeof(expirations));
+  assert(size == sizeof(expirations));
+}
+
 unsigned NumIoThreads() {
   // Reserve one core for the main (command-executing) thread.
   const unsigned hardware = std::thread::hardware_concurrency();
@@ -134,9 +153,13 @@ Server::Server(ServerConfig config)
     : store_(std::make_unique<Store>(std::make_unique<TimeNow>())),
       dispatcher_(store_),
       snapshotter_(kSnapshotDir, kSnapshotPrefix),
+      maintenance_(std::make_unique<TimeNow>()),
       epoll_fd_(epoll_create1(EPOLL_CLOEXEC)),
       listen_fd_(CreateListenSocket(config.port)),
-      snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)) {
+      snapshot_fd_(CreateTimerIntervalFd(config.snapshot_interval_ms)),
+      maintenance_fd_(CreateTimerIntervalFd(kMaintenanceIntervalMs)) {
+  maintenance_.Add(std::make_unique<ExpiryTask>(store_));
+
   const unsigned num_io_threads = NumIoThreads();
   io_threads_.reserve(num_io_threads);
   for (unsigned i = 0; i < num_io_threads; ++i) {
@@ -145,9 +168,10 @@ Server::Server(ServerConfig config)
 
   if (epoll_fd_ < 0 || listen_fd_ < 0) return;
 
-  // Watch the listen socket (new connections) and the command eventfd
-  // (IO threads have parsed requests to execute).
-  for (const int watched_fd : {listen_fd_, command_event_.Fd(), snapshot_fd_}) {
+  // Watch the listen socket (new connections), the command eventfd (IO threads
+  // have parsed requests to execute) and the snapshot and expiry timers.
+  for (const int watched_fd :
+       {listen_fd_, command_event_.Fd(), snapshot_fd_, maintenance_fd_}) {
     if (watched_fd != -1) {
       epoll_event event{};
       event.events = EPOLLIN;
@@ -161,6 +185,7 @@ Server::~Server() {
   for (const auto& io_thread : io_threads_) io_thread->Stop();
   if (listen_fd_ >= 0) close(listen_fd_);
   if (epoll_fd_ >= 0) close(epoll_fd_);
+  if (maintenance_fd_ >= 0) close(maintenance_fd_);
 }
 
 int Server::Run() {
@@ -184,12 +209,18 @@ int Server::Run() {
 
   std::array<epoll_event, kMaxEvents> events{};
   while (true) {
-    const int nfds = epoll_wait(epoll_fd_, events.data(), events.size(), -1);
+    // With maintenance pending, poll rather than block so an idle loop can
+    // spend the gap in traffic on it.
+    const int timeout_ms = maintenance_.HasPendingWork() ? 0 : -1;
+    const int nfds =
+        epoll_wait(epoll_fd_, events.data(), events.size(), timeout_ms);
     if (nfds < 0) {
       if (errno == EINTR) continue;  // interrupted; just re-arm
       std::perror("epoll_wait");
       return EXIT_FAILURE;
     }
+
+    if (nfds == 0) maintenance_.RunSlice(kIdleSliceBudgetMs);
 
     for (int i = 0; i < nfds; ++i) {
       const epoll_event& event = events[i];
@@ -199,10 +230,11 @@ int Server::Run() {
         command_event_.Drain();
         ProcessCommands();
       } else if (event.data.fd == snapshot_fd_) {
-        uint64_t expirations;
-        ssize_t size = read(event.data.fd, &expirations, sizeof(expirations));
-        assert(size == sizeof(expirations));
+        DrainTimerFd(snapshot_fd_);
         CreateSnapshot();
+      } else if (event.data.fd == maintenance_fd_) {
+        DrainTimerFd(maintenance_fd_);
+        maintenance_.RunSlice(kPeriodicSliceBudgetMs);
       } else {
         // A snapshot child's pidfd became readable: the child has exited.
         ReapSnapshot(event.data.fd);

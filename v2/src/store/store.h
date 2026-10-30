@@ -3,10 +3,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
 #include <utility>
+#include <variant>
 
 #include "data_structures/map/map.h"
 #include "time/time.h"
@@ -19,12 +22,16 @@ namespace myredis {
 // stays an implementation detail of Store.
 class Store {
  public:
-  explicit Store(std::unique_ptr<Time> time);
+  // rng_seed seeds the sampling in ActiveExpireCycle; tests pass a fixed one.
+  explicit Store(std::unique_ptr<Time> time,
+                 std::uint64_t rng_seed = std::random_device{}());
 
   Store(const Store&) = delete;
   Store& operator=(const Store&) = delete;
 
-  [[nodiscard]] std::optional<std::string> Get(const std::string& key) const;
+  // Returns key's value, or std::nullopt if it is missing or has expired. An
+  // expired key is deleted on the spot.
+  [[nodiscard]] std::optional<std::string> Get(const std::string& key);
 
   void Set(std::string key, std::optional<std::string> value);
 
@@ -58,8 +65,34 @@ class Store {
   // absolute timestamp ExpireAt expects.
   [[nodiscard]] std::int64_t NowMs() const;
 
+  // Outcome of one sampling round of ActiveExpireCycle.
+  struct ExpireRound {
+    std::size_t sampled;
+    std::size_t removed;
+  };
+  // Called after each round; returns true to sample another round.
+  using ExpireContinuePredicate = std::function<bool(const ExpireRound&)>;
+
+  struct ExpireCycleResult {
+    std::size_t removed;
+    // The final round, which may be partial if the index ran out of keys.
+    ExpireRound last_round;
+    // True if the cycle stopped because no keys with a TTL remain.
+    bool index_empty;
+  };
+
+  // Actively removes expired keys by random sampling, like Redis's
+  // activeExpireCycle: samples kExpireSampleSize keys that have a TTL, deletes
+  // the expired ones, and samples again while should_continue allows (and
+  // keys with a TTL remain). Always runs at least one round. Expired keys it
+  // misses are deleted lazily when accessed. Scheduling policy (how long to
+  // run, when to come back) belongs to the caller; see ExpiryTask.
+  ExpireCycleResult ActiveExpireCycle(
+      const ExpireContinuePredicate& should_continue);
+
   // Serialises the store to a JSON object mapping each key to its value. A
   // key whose value is absent (std::nullopt) is serialised as JSON null.
+  // Keys that have expired but not yet been deleted are left out.
   [[nodiscard]] std::string SerialiseToJson() const;
 
   // Populates the store from JSON produced by SerialiseToJson. Throws
@@ -68,6 +101,8 @@ class Store {
 
  private:
   static constexpr int64_t NO_EXPIRY = -1;
+
+  static constexpr std::size_t kExpireSampleSize = 20;
 
   struct Entry {
     int64_t expiry_ = NO_EXPIRY;
@@ -83,8 +118,26 @@ class Store {
   // json_data is malformed.
   static Entry ParseEntryJson(const std::string& json_data, size_t& pos);
 
+  static bool IsExpired(const Entry& entry, int64_t now_ms) {
+    return entry.expiry_ != NO_EXPIRY && entry.expiry_ < now_ms;
+  }
+
+  // Deletes key if it has expired as of now_ms. Returns true if it was
+  // deleted.
+  bool RemoveIfExpired(const std::string& key, int64_t now_ms);
+
+  // Looks key up, deleting it first if it has expired, so callers only ever
+  // see live entries.
+  std::optional<std::reference_wrapper<Entry>> LookUpLive(
+      const std::string& key);
+
   std::unique_ptr<Map<std::string, Entry>> data_;
+  // Index of the keys in data_ that have a TTL, so ActiveExpireCycle samples
+  // only keys that can expire. The expiry itself stays in Entry; every
+  // operation that adds or clears a TTL must keep this in sync.
+  std::unique_ptr<Map<std::string, std::monostate>> expires_;
   std::unique_ptr<Time> time_;
+  std::mt19937_64 rng_;
 };
 
 }  // namespace myredis

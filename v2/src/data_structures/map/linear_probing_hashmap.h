@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <random>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -34,6 +35,9 @@ class LinearProbingHashmap final : public Map<K, V> {
   double load_factor_;
   std::vector<Entry> entries_;
   size_t size_ = 0;
+  // DELETED slots. They lengthen probe sequences like live elements do, so
+  // they count towards the load factor until a resize clears them.
+  size_t tombstones_ = 0;
 
  public:
   LinearProbingHashmap(const LinearProbingHashmap& other)
@@ -42,14 +46,16 @@ class LinearProbingHashmap final : public Map<K, V> {
         hash_(other.hash_),
         load_factor_(other.load_factor_),
         entries_(other.entries_),
-        size_(other.size_) {}
+        size_(other.size_),
+        tombstones_(other.tombstones_) {}
 
   LinearProbingHashmap(LinearProbingHashmap&& other) noexcept
       : Map<K, V>(std::move(other)),
         hash_(std::move(other.hash_)),
         load_factor_(other.load_factor_),
         entries_(std::move(other.entries_)),
-        size_(other.size_) {}
+        size_(other.size_),
+        tombstones_(other.tombstones_) {}
 
   LinearProbingHashmap& operator=(const LinearProbingHashmap& other)
     requires std::is_copy_constructible_v<K> && std::is_copy_constructible_v<V>
@@ -60,6 +66,7 @@ class LinearProbingHashmap final : public Map<K, V> {
     load_factor_ = other.load_factor_;
     entries_ = other.entries_;
     size_ = other.size_;
+    tombstones_ = other.tombstones_;
     return *this;
   }
 
@@ -70,6 +77,7 @@ class LinearProbingHashmap final : public Map<K, V> {
     load_factor_ = other.load_factor_;
     entries_ = std::move(other.entries_);
     size_ = other.size_;
+    tombstones_ = other.tombstones_;
     return *this;
   }
 
@@ -93,14 +101,28 @@ class LinearProbingHashmap final : public Map<K, V> {
   }
 
   void Insert(K key, V value) override {
-    InsertWithoutSize(std::move(key), std::move(value));
-    size_++;
+    // Look for the key across the whole probe sequence first: it may sit past
+    // a tombstone, and inserting at that tombstone would duplicate it.
+    const int existing_index = InternalFind(key);
+    if (existing_index != -1) {
+      entries_[existing_index].value = std::move(value);
+      return;
+    }
+
+    if (NeedsResizeForInsert()) Resize();
+    InsertNew(std::move(key), std::move(value));
   }
 
   void Remove(const K& key) override {
     const int bucket_index = InternalFind(key);
     if (bucket_index != -1) {
-      entries_[bucket_index].state = DELETED;
+      Entry& entry = entries_[bucket_index];
+      entry.state = DELETED;
+      // Free the removed key and value now rather than when the slot is reused
+      entry.key.reset();
+      entry.value.reset();
+      size_--;
+      tombstones_++;
     }
   }
 
@@ -115,34 +137,62 @@ class LinearProbingHashmap final : public Map<K, V> {
     }
   }
 
- private:
-  void InsertWithoutSize(K key, V value) {
-    if (size_ > load_factor_ * entries_.size()) {
-      Resize();
+  std::optional<K> RandomKey(std::mt19937_64& rng) override {
+    if (entries_.empty()) return std::nullopt;
+    // Start at a random slot and scan forward (wrapping) to the first live
+    // element. Elements that follow runs of empty/deleted slots are favoured
+    // slightly, which is fine for sampling.
+    std::uniform_int_distribution<size_t> pick_slot(0, entries_.size() - 1);
+    const size_t start = pick_slot(rng);
+    for (size_t offset = 0; offset < entries_.size(); ++offset) {
+      const Entry& entry = entries_[(start + offset) % entries_.size()];
+      if (entry.state == ELEMENT && entry.key.has_value()) return entry.key;
     }
+    return std::nullopt;
+  }
 
+ private:
+  // True if inserting one more key would push the occupied slots (live
+  // elements plus tombstones, since both lengthen probe sequences) past the
+  // load factor.
+  [[nodiscard]] bool NeedsResizeForInsert() const {
+    return static_cast<double>(size_ + tombstones_ + 1) >
+           load_factor_ * static_cast<double>(entries_.size());
+  }
+
+  // Places a key known not to be in the map into the first free (empty or
+  // deleted) slot of its probe sequence. Does not resize.
+  void InsertNew(K key, V value) {
     size_t bucket_index = hash_(key) % entries_.size();
-    while (HoldsOtherKey(entries_[bucket_index], key)) {
+    while (entries_[bucket_index].state == ELEMENT) {
       bucket_index = (bucket_index + 1) % entries_.size();
     }
 
-    entries_[bucket_index].state = ELEMENT;
-    entries_[bucket_index].key = std::move(key);
-    entries_[bucket_index].value = std::move(value);
+    Entry& entry = entries_[bucket_index];
+    if (entry.state == DELETED) tombstones_--;
+    entry.state = ELEMENT;
+    entry.key = std::move(key);
+    entry.value = std::move(value);
+    size_++;
   }
 
+  // Rebuilds the table, dropping tombstones. Capacity comes from the live
+  // count (plus the insert that triggered this) rather than the old capacity,
+  // so a table that filled up mostly with tombstones does not keep growing.
   void Resize() {
     std::vector<Entry> old_entries = std::move(entries_);
 
-    entries_ = std::vector<Entry>(
-        std::max(static_cast<size_t>(2), old_entries.size() * 2));
+    entries_ =
+        std::vector<Entry>(std::max(static_cast<size_t>(2), (size_ + 1) * 2));
+    size_ = 0;
+    tombstones_ = 0;
 
     for (Entry& entry : old_entries) {
       assert(entry.state != ELEMENT ||
              (entry.key.has_value() && entry.value.has_value()));
       if (entry.state == ELEMENT && entry.key.has_value() &&
           entry.value.has_value()) {
-        InsertWithoutSize(std::move(*entry.key), std::move(*entry.value));
+        InsertNew(std::move(*entry.key), std::move(*entry.value));
       }
     }
   }

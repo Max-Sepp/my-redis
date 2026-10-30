@@ -6,6 +6,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <utility>
 
@@ -42,6 +43,11 @@ struct StandardMapFactory {
     return std::make_unique<StandardMap<std::string, int>>();
   }
 };
+
+// A fixed seed keeps the RandomKey tests reproducible.
+inline std::mt19937_64 MakeRng() {
+  return std::mt19937_64(0);  // NOLINT(cert-msc51-cpp)
+}
 
 // 1. Template the test fixture on a type `T`
 template <typename MapFactory>
@@ -354,4 +360,86 @@ TYPED_TEST(MapTestUniquePtr, ForEachUniquePtrCollectsAllItems) {
   EXPECT_EQ(gathered["one"], "a");
   EXPECT_EQ(gathered["two"], "b");
   EXPECT_EQ(gathered["three"], "c");
+}
+
+TYPED_TEST(MapTest, RandomKeyOnEmptyMapIsNullopt) {
+  std::mt19937_64 rng = MakeRng();
+  EXPECT_FALSE(this->map->RandomKey(rng).has_value());
+}
+
+TYPED_TEST(MapTest, RandomKeyReturnsOnlyKey) {
+  std::mt19937_64 rng = MakeRng();
+  this->map->Insert(std::string("one"), 1);
+  const auto key = this->map->RandomKey(rng);
+  ASSERT_TRUE(key.has_value());
+  EXPECT_EQ(*key, "one");
+}
+
+TYPED_TEST(MapTest, RandomKeyEventuallyReturnsEveryLiveKey) {
+  std::mt19937_64 rng = MakeRng();
+  this->map->Insert(std::string("one"), 1);
+  this->map->Insert(std::string("two"), 2);
+  this->map->Insert(std::string("three"), 3);
+  this->map->Insert(std::string("removed"), 4);
+  this->map->Remove(std::string("removed"));
+
+  constexpr int kSamples = 1000;
+  std::map<std::string, int> seen;
+  for (int i = 0; i < kSamples; ++i) {
+    const auto key = this->map->RandomKey(rng);
+    ASSERT_TRUE(key.has_value());
+    seen[*key]++;
+  }
+
+  EXPECT_EQ(seen.size(), 3);
+  EXPECT_TRUE(seen.contains("one"));
+  EXPECT_TRUE(seen.contains("two"));
+  EXPECT_TRUE(seen.contains("three"));
+}
+
+TYPED_TEST(MapTest, RandomKeyAfterRemovingEverythingIsNullopt) {
+  std::mt19937_64 rng = MakeRng();
+  this->map->Insert(std::string("one"), 1);
+  this->map->Remove(std::string("one"));
+  EXPECT_FALSE(this->map->RandomKey(rng).has_value());
+}
+
+// With every key hashing to the same slot, "b" lands after "a" on one probe
+// chain. Removing "a" leaves a tombstone in front of "b"; re-inserting "b"
+// must update it in place rather than fill the tombstone with a duplicate,
+// or removing "b" would only remove one copy.
+TEST(LinearProbingHashmapTest, ReinsertPastTombstoneDoesNotDuplicate) {
+  LinearProbingHashmap<std::string, int> map(
+      kDefaultLoadFactor, [](const std::string&) { return size_t{0}; });
+  map.Insert(std::string("a"), 1);
+  map.Insert(std::string("b"), 2);
+  map.Remove(std::string("a"));
+
+  constexpr int kUpdatedValue = 3;
+  map.Insert(std::string("b"), kUpdatedValue);
+  const auto value = map.LookUp(std::string("b"));
+  ASSERT_TRUE(value.has_value());
+  EXPECT_EQ(value->get(), kUpdatedValue);
+
+  map.Remove(std::string("b"));
+  EXPECT_FALSE(map.LookUp(std::string("b")).has_value());
+
+  int count = 0;
+  map.ForEach([&](const std::string&, int&) { count++; });
+  EXPECT_EQ(count, 0);
+}
+
+TEST(LinearProbingHashmapTest, ChurnKeepsEveryLiveKey) {
+  LinearProbingHashmap<std::string, int> map(kDefaultLoadFactor, StringHash, 2);
+  constexpr int kRounds = 10000;
+  map.Insert(std::string("kept"), -1);
+  for (int i = 0; i < kRounds; ++i) {
+    map.Insert(std::to_string(i), i);
+    map.Remove(std::to_string(i));
+  }
+
+  const auto kept = map.LookUp(std::string("kept"));
+  ASSERT_TRUE(kept.has_value());
+  EXPECT_EQ(kept->get(), -1);
+  EXPECT_FALSE(map.LookUp(std::string("0")).has_value());
 }

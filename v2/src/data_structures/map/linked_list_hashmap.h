@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -143,6 +144,29 @@ class LinkedListHashmap final : public Map<K, V> {
         curr = curr->next.get();
       }
     }
+  }
+
+  std::optional<K> RandomKey(std::mt19937_64& rng) override {
+    if (size_ == 0) return std::nullopt;
+    // Start at a random bucket, walk forward to the first non-empty one, then
+    // pick uniformly within its chain (as Redis does). Keys in short chains or
+    // after runs of empty buckets are favoured slightly, which is fine for
+    // sampling.
+    std::uniform_int_distribution<size_t> pick_bucket(0, entries_.size() - 1);
+    size_t bucket = pick_bucket(rng);
+    while (entries_[bucket] == nullptr) {
+      bucket = (bucket + 1) % entries_.size();
+    }
+    size_t chain_length = 0;
+    for (Entry* curr = entries_[bucket].get(); curr; curr = curr->next.get()) {
+      chain_length++;
+    }
+    std::uniform_int_distribution<size_t> pick_in_chain(0, chain_length - 1);
+    Entry* chosen = entries_[bucket].get();
+    for (size_t steps = pick_in_chain(rng); steps > 0; --steps) {
+      chosen = chosen->next.get();
+    }
+    return chosen->key;
   }
 };
 

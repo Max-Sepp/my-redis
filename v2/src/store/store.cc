@@ -2,37 +2,47 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 
-#include "data_structures/map/standard_map.h"
+#include "data_structures/map/hash.h"
+#include "data_structures/map/linear_probing_hashmap.h"
+#include "data_structures/map/map.h"
 #include "store/serialise.h"
 #include "time/time.h"
 
 namespace myredis {
 
-Store::Store(std::unique_ptr<Time> time)
-    : data_(std::make_unique<StandardMap<std::string, Entry>>()),
-      time_(std::move(time)) {}
+Store::Store(std::unique_ptr<Time> time, const std::uint64_t rng_seed)
+    : data_(std::make_unique<LinearProbingHashmap<std::string, Entry>>(
+          kDefaultLoadFactor, StringHash)),
+      expires_(
+          std::make_unique<LinearProbingHashmap<std::string, std::monostate>>(
+              kDefaultLoadFactor, StringHash)),
+      time_(std::move(time)),
+      rng_(rng_seed) {}
 
-[[nodiscard]] std::optional<std::string> Store::Get(
-    const std::string& key) const {
-  const auto found = data_->LookUp(key);
+[[nodiscard]] std::optional<std::string> Store::Get(const std::string& key) {
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return std::nullopt;
-  if (found->get().expiry_ != NO_EXPIRY &&
-      found->get().expiry_ < time_->NowMs())
-    return std::nullopt;
   return found->get().value_;
 }
 
 void Store::Set(std::string key, std::optional<std::string> value) {
+  // Overwriting a key discards its TTL
+  expires_->Remove(key);
   data_->Insert(std::move(key), Entry(std::move(value)));
 }
 
-void Store::Del(const std::string& key) { data_->Remove(key); }
+void Store::Del(const std::string& key) {
+  data_->Remove(key);
+  expires_->Remove(key);
+}
 
 bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms) {
   return ExpireAt(key, timestamp_ms, ExpireOption::NA);
@@ -40,7 +50,7 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms) {
 
 bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
                      ExpireOption option) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return false;
   Entry& entry = *found;
 
@@ -69,12 +79,13 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
   }
 
   entry.expiry_ = timestamp_ms;
+  expires_->Insert(key, std::monostate{});
 
   return true;
 }
 
 [[nodiscard]] std::int64_t Store::Ttl(const std::string& key) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return -2;  // Key does not exist
   Entry& entry = *found;
   if (entry.expiry_ == NO_EXPIRY) return -1;  // Key exists but has no TTL
@@ -86,20 +97,69 @@ bool Store::ExpireAt(const std::string& key, int64_t timestamp_ms,
 [[nodiscard]] std::int64_t Store::NowMs() const { return time_->NowMs(); }
 
 bool Store::Persist(const std::string& key) {
-  const auto found = data_->LookUp(key);
+  const auto found = LookUpLive(key);
   if (!found.has_value()) return false;
   Entry& entry = *found;
   if (entry.expiry_ == NO_EXPIRY) return false;
-  if (entry.expiry_ < time_->NowMs()) return false;  // Key has expired
   entry.expiry_ = NO_EXPIRY;
+  expires_->Remove(key);
   return true;
+}
+
+Store::ExpireCycleResult Store::ActiveExpireCycle(
+    const ExpireContinuePredicate& should_continue) {
+  const std::int64_t now_ms = time_->NowMs();
+  ExpireCycleResult result{.removed = 0,
+                           .last_round = {.sampled = 0, .removed = 0},
+                           .index_empty = false};
+  bool keep_sampling = true;
+  while (keep_sampling) {
+    // Sampling is with replacement, so a small index may yield the same live
+    // key more than once.
+    ExpireRound round{.sampled = 0, .removed = 0};
+    while (!result.index_empty && round.sampled < kExpireSampleSize) {
+      const std::optional<std::string> key = expires_->RandomKey(rng_);
+      if (!key.has_value()) {
+        result.index_empty = true;
+      } else {
+        round.sampled++;
+        if (RemoveIfExpired(*key, now_ms)) round.removed++;
+      }
+    }
+    result.removed += round.removed;
+    result.last_round = round;
+    keep_sampling = !result.index_empty && should_continue(round);
+  }
+  return result;
+}
+
+bool Store::RemoveIfExpired(const std::string& key, const int64_t now_ms) {
+  const auto found = data_->LookUp(key);
+  if (found.has_value() && !IsExpired(found->get(), now_ms)) return false;
+  // A missing key would mean the index fell out of sync; drop it either way.
+  data_->Remove(key);
+  expires_->Remove(key);
+  return found.has_value();
+}
+
+std::optional<std::reference_wrapper<Store::Entry>> Store::LookUpLive(
+    const std::string& key) {
+  const auto found = data_->LookUp(key);
+  if (!found.has_value()) return std::nullopt;
+  if (IsExpired(found->get(), time_->NowMs())) {
+    Del(key);
+    return std::nullopt;
+  }
+  return found;
 }
 
 [[nodiscard]] std::string Store::SerialiseToJson() const {
   std::string out = "{";
   bool first = true;
+  const std::int64_t now_ms = time_->NowMs();
 
   data_->ForEach([&](const std::string& key, const Entry& entry) {
+    if (IsExpired(entry, now_ms)) return;
     if (!first) out.push_back(',');
     first = false;
 
@@ -194,7 +254,9 @@ void Store::DeserialiseFromJson(const std::string& json_data) {
       pos++;
 
       SkipWhitespace(json_data, pos);
-      data_->Insert(std::move(key), ParseEntryJson(json_data, pos));
+      Entry entry = ParseEntryJson(json_data, pos);
+      if (entry.expiry_ != NO_EXPIRY) expires_->Insert(key, std::monostate{});
+      data_->Insert(std::move(key), std::move(entry));
 
       SkipWhitespace(json_data, pos);
       if (pos >= json_data.size()) {

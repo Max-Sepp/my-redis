@@ -1,8 +1,11 @@
 #ifndef MYREDIS_DATA_STRUCTURES_MAP_STANDARD_MAP_H_
 #define MYREDIS_DATA_STRUCTURES_MAP_STANDARD_MAP_H_
 
+#include <cstddef>
 #include <functional>
+#include <iterator>
 #include <optional>
+#include <random>
 #include <unordered_map>
 #include <utility>
 
@@ -48,6 +51,24 @@ class StandardMap final : public Map<K, V> {
     for (auto& [key, value] : data_) {
       action(key, value);
     }
+  }
+
+  std::optional<K> RandomKey(std::mt19937_64& rng) override {
+    if (data_.empty()) return std::nullopt;
+    // Start at a random bucket, walk forward to the first non-empty one, then
+    // pick uniformly within it. Keys that follow runs of empty buckets are
+    // favoured slightly, which is fine for sampling.
+    std::uniform_int_distribution<std::size_t> pick_bucket(
+        0, data_.bucket_count() - 1);
+    std::size_t bucket = pick_bucket(rng);
+    while (data_.bucket_size(bucket) == 0) {
+      bucket = (bucket + 1) % data_.bucket_count();
+    }
+    std::uniform_int_distribution<std::size_t> pick_in_bucket(
+        0, data_.bucket_size(bucket) - 1);
+    return std::next(data_.begin(bucket),
+                     static_cast<std::ptrdiff_t>(pick_in_bucket(rng)))
+        ->first;
   }
 
  private:
