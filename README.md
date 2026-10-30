@@ -44,6 +44,9 @@ In `v2/` these have been brought up to a consistent baseline:
 
 ## Building
 
+`v2` gets its dependencies from [vcpkg](https://vcpkg.io), pinned in `v2/vcpkg.json`. Install
+vcpkg and set `VCPKG_ROOT` to its directory; packages are installed during CMake configure.
+
 A top-level `Makefile` builds both trees. All output is written under a single top-level
 `build/` directory (`build/v1/<preset>/` and `build/v2/<preset>/`).
 
