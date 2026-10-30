@@ -40,6 +40,19 @@ jobs:
         run: |
           echo "build-output-dir=${{ github.workspace }}/build/v2" >> "$GITHUB_OUTPUT"
 
+      - name: Set up vcpkg
+        # The full clone is needed so vcpkg can resolve builtin-baseline.
+        run: |
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          git clone https://github.com/microsoft/vcpkg.git "$RUNNER_TEMP/vcpkg"
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('v2/vcpkg.json') }}
+
       - name: Configure CMake
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
         # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
@@ -47,6 +60,7 @@ jobs:
         # turns every finding into a hard failure so the test job goes red.
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
