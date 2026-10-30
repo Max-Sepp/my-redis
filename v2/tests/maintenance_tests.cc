@@ -102,7 +102,7 @@ TEST_F(ExpiryTaskTest, BacklogDrainsOverSlices) {
   int slices = 1;
   while (task.RunSlice(kNeverHasTime)) slices++;
 
-  EXPECT_EQ(slices, kNumKeys / 20 + 1);
+  EXPECT_EQ(slices, (kNumKeys / 20) + 1);
   EXPECT_EQ(store_->SerialiseToJson(), "{}");
 }
 
@@ -172,11 +172,12 @@ TEST_F(MaintenanceSchedulerTest, PendingReflectsEachTasksLastTurn) {
 }
 
 TEST_F(MaintenanceSchedulerTest, HasTimeEndsWhenBudgetIsSpent) {
+  constexpr std::int64_t kBudgetMs = 5;
   FakeTask* task = AddTask("a");
 
   // The scheduler reads the start time, then each check advances the clock
   // 1ms: checks at +1..+4 are within a 5ms budget, +5 is not.
-  scheduler_->RunSlice(5);
+  scheduler_->RunSlice(kBudgetMs);
   EXPECT_EQ(task->time_checks, 4);
 }
 

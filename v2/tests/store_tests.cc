@@ -44,6 +44,11 @@ struct StandardMapFactory {
   }
 };
 
+// A fixed seed keeps the RandomKey tests reproducible.
+inline std::mt19937_64 MakeRng() {
+  return std::mt19937_64(0);  // NOLINT(cert-msc51-cpp)
+}
+
 // 1. Template the test fixture on a type `T`
 template <typename MapFactory>
 class MapTest : public ::testing::Test {
@@ -358,12 +363,12 @@ TYPED_TEST(MapTestUniquePtr, ForEachUniquePtrCollectsAllItems) {
 }
 
 TYPED_TEST(MapTest, RandomKeyOnEmptyMapIsNullopt) {
-  std::mt19937_64 rng(0);
+  std::mt19937_64 rng = MakeRng();
   EXPECT_FALSE(this->map->RandomKey(rng).has_value());
 }
 
 TYPED_TEST(MapTest, RandomKeyReturnsOnlyKey) {
-  std::mt19937_64 rng(0);
+  std::mt19937_64 rng = MakeRng();
   this->map->Insert(std::string("one"), 1);
   const auto key = this->map->RandomKey(rng);
   ASSERT_TRUE(key.has_value());
@@ -371,7 +376,7 @@ TYPED_TEST(MapTest, RandomKeyReturnsOnlyKey) {
 }
 
 TYPED_TEST(MapTest, RandomKeyEventuallyReturnsEveryLiveKey) {
-  std::mt19937_64 rng(0);
+  std::mt19937_64 rng = MakeRng();
   this->map->Insert(std::string("one"), 1);
   this->map->Insert(std::string("two"), 2);
   this->map->Insert(std::string("three"), 3);
@@ -393,7 +398,7 @@ TYPED_TEST(MapTest, RandomKeyEventuallyReturnsEveryLiveKey) {
 }
 
 TYPED_TEST(MapTest, RandomKeyAfterRemovingEverythingIsNullopt) {
-  std::mt19937_64 rng(0);
+  std::mt19937_64 rng = MakeRng();
   this->map->Insert(std::string("one"), 1);
   this->map->Remove(std::string("one"));
   EXPECT_FALSE(this->map->RandomKey(rng).has_value());

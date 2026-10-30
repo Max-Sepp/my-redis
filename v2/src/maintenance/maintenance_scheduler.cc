@@ -6,6 +6,9 @@
 #include <memory>
 #include <utility>
 
+#include "maintenance/background_task.h"
+#include "time/time.h"
+
 namespace myredis {
 
 MaintenanceScheduler::MaintenanceScheduler(std::unique_ptr<Time> time)

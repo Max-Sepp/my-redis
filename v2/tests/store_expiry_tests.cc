@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "store/store.h"
 #include "time/time.h"
@@ -177,7 +178,7 @@ TEST_F(StoreExpiryTest, ExpireAtDoesNotReviveExpiredKey) {
   SetWithTtl("a");
   AdvancePastTtl();
 
-  EXPECT_FALSE(store_->ExpireAt("a", kStartMs + 10 * kTtlMs));
+  EXPECT_FALSE(store_->ExpireAt("a", kStartMs + (10 * kTtlMs)));
   EXPECT_FALSE(store_->Get("a").has_value());
 }
 

@@ -12,6 +12,7 @@
 
 #include "data_structures/map/hash.h"
 #include "data_structures/map/linear_probing_hashmap.h"
+#include "data_structures/map/map.h"
 #include "store/serialise.h"
 #include "time/time.h"
 

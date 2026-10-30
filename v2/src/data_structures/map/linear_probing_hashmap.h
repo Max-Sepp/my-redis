@@ -146,7 +146,7 @@ class LinearProbingHashmap final : public Map<K, V> {
     const size_t start = pick_slot(rng);
     for (size_t offset = 0; offset < entries_.size(); ++offset) {
       const Entry& entry = entries_[(start + offset) % entries_.size()];
-      if (entry.state == ELEMENT && entry.key.has_value()) return *entry.key;
+      if (entry.state == ELEMENT && entry.key.has_value()) return entry.key;
     }
     return std::nullopt;
   }
